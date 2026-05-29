@@ -53,13 +53,18 @@ async def staleness_report(
             ][:bounded]
         if include_missing:
             plex_titles = {str(item.get("title", "")).lower() for item in plex_items}
-            data["managed_missing_from_plex"] = [
-                compact_movie(item)
-                for item in radarr_movies
-                if not item.get("hasFile") or str(item.get("title", "")).lower() not in plex_titles
-            ][:bounded] + [
-                compact_series(item) for item in sonarr_series if str(item.get("title", "")).lower() not in plex_titles
-            ][:bounded]
+            data["managed_missing_from_plex"] = (
+                [
+                    compact_movie(item)
+                    for item in radarr_movies
+                    if not item.get("hasFile") or str(item.get("title", "")).lower() not in plex_titles
+                ]
+                + [
+                    compact_series(item)
+                    for item in sonarr_series
+                    if str(item.get("title", "")).lower() not in plex_titles
+                ]
+            )[:bounded]
         data["queue_warnings"] = [
             compact_queue_item("radarr", item) for item in _records(radarr_queue) if _stuck(item)
         ][:bounded] + [compact_queue_item("sonarr", item) for item in _records(sonarr_queue) if _stuck(item)][:bounded]

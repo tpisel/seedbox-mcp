@@ -7,18 +7,18 @@ run:
     uv run python -m whatbox_media_mcp.server
 
 test:
-    uv run --extra dev pytest
+    uv run pytest
 
 lint:
-    uv run --extra dev ruff check .
+    uv run ruff check .
 
 format:
-    uv run --extra dev ruff format .
+    uv run ruff format .
 
 check:
-    uv run --extra dev ruff check .
-    uv run --extra dev mypy src
-    uv run --extra dev pytest
+    uv run ruff check .
+    uv run mypy src
+    uv run pytest
 
 smoke:
-    scripts/healthcheck.sh
+    uv run scripts/healthcheck.sh

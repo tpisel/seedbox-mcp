@@ -13,8 +13,6 @@ def redact_value(key: str, value: Any) -> Any:
         return None
     if any(marker in key.upper() for marker in SECRET_KEYS):
         return "********"
-    if isinstance(value, SecretStr):
-        return "********"
     return value
 
 
@@ -35,7 +33,6 @@ class Settings(BaseSettings):
     radarr_default_root_folder: str = Field(min_length=1)
     radarr_default_quality_profile_id: int = Field(gt=0)
     radarr_default_min_availability: str = "released"
-    radarr_delete_files_default: bool = False
 
     sonarr_url: HttpUrl
     sonarr_api_key: SecretStr = Field(min_length=1)
@@ -43,7 +40,6 @@ class Settings(BaseSettings):
     sonarr_default_quality_profile_id: int = Field(gt=0)
     sonarr_default_language_profile_id: int | None = None
     sonarr_default_series_type: str = "standard"
-    sonarr_delete_files_default: bool = False
 
     plex_url: HttpUrl
     plex_token: SecretStr = Field(min_length=1)

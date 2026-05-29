@@ -14,6 +14,19 @@ def test_config_redacts_secrets(settings: Settings) -> None:
     assert summary["mcp_bearer_token"] == "********"
 
 
-def test_config_requires_core_urls_and_credentials() -> None:
+def test_config_requires_core_urls_and_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in [
+        "RADARR_URL",
+        "RADARR_API_KEY",
+        "RADARR_DEFAULT_ROOT_FOLDER",
+        "RADARR_DEFAULT_QUALITY_PROFILE_ID",
+        "SONARR_URL",
+        "SONARR_API_KEY",
+        "SONARR_DEFAULT_ROOT_FOLDER",
+        "SONARR_DEFAULT_QUALITY_PROFILE_ID",
+        "PLEX_URL",
+        "PLEX_TOKEN",
+    ]:
+        monkeypatch.delenv(var, raising=False)
     with pytest.raises(ValidationError):
-        Settings(mcp_bearer_token=SecretStr("dev"))
+        Settings(_env_file=None, mcp_bearer_token=SecretStr("dev"))  # type: ignore[call-arg]
