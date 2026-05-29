@@ -38,10 +38,25 @@ async def sonarr_overview(
             data["queue"] = [compact_queue_item("sonarr", item) for item in _records(queue)[:bounded]]
         if include_missing:
             missing = await services.sonarr.get("/api/v3/wanted/missing", {"page": 1, "pageSize": bounded})
+            # Build id->title map if we didn't already fetch series, so titles aren't null
+            series_titles: dict[int, str] = {}
+            if include_series and "series" in data:
+                series_titles = {s["sonarr_id"]: s["title"] for s in data["series"] if "sonarr_id" in s}
+            else:
+                raw_series = await services.sonarr.get("/api/v3/series")
+                series_titles = {
+                    item["id"]: item["title"]
+                    for item in _as_list(raw_series)
+                    if "id" in item and "title" in item
+                }
             data["missing"] = [
                 {
                     "sonarr_id": item.get("seriesId"),
-                    "series_title": item.get("series", {}).get("title"),
+                    "series_title": (
+                        item.get("series", {}).get("title")
+                        or item.get("seriesTitle")
+                        or series_titles.get(item.get("seriesId"))
+                    ),
                     "season_number": item.get("seasonNumber"),
                     "episode_number": item.get("episodeNumber"),
                     "title": item.get("title"),

@@ -27,9 +27,11 @@ async def staleness_report(
         bounded = clamp_limit(limit)
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
         sections = _sections(services, media_type)
+        # Fetch a large ceiling so title-matching against Radarr/Sonarr is accurate;
+        # bounded is only applied when slicing output below.
         plex_items = []
         for section in sections:
-            plex_items.extend(await services.plex.get_basic_library_items(section, bounded))
+            plex_items.extend(await services.plex.get_basic_library_items(section, 2000))
 
         radarr_movies = _as_list(await services.radarr.get("/api/v3/movie"))
         sonarr_series = _as_list(await services.sonarr.get("/api/v3/series"))
@@ -39,7 +41,9 @@ async def staleness_report(
         data: dict[str, Any] = {"older_than_days": older_than_days, "limit": bounded}
         if include_unwatched:
             data["added_long_ago_unwatched"] = [
-                item for item in plex_items if not item.get("view_count") and _before(item.get("added_at"), cutoff)
+                item
+                for item in plex_items
+                if not item.get("view_count") and not item.get("last_viewed_at") and _before(item.get("added_at"), cutoff)
             ][:bounded]
             data["watched_long_ago"] = [
                 item
