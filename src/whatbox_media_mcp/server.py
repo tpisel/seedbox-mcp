@@ -308,7 +308,8 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
             Route("/oauth/authorize", oauth_store.handle_authorize_post, methods=["POST"]),
             Route("/oauth/token", oauth_store.handle_token, methods=["POST"]),
             Mount("/", app=mcp_app),
-        ]
+        ],
+        lifespan=mcp_app.lifespan,
     )
 
     return BearerAuthApp(starlette_app, settings.mcp_bearer_token.get_secret_value(), oauth_store)
