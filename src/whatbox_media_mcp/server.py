@@ -34,6 +34,7 @@ from whatbox_media_mcp.tools.sonarr import (
 )
 from whatbox_media_mcp.tools.staleness import staleness_report
 from whatbox_media_mcp.tools.status import media_status
+from whatbox_media_mcp.tools.tautulli import tautulli_history, tautulli_user_stats, tautulli_users
 
 logger = logging.getLogger("whatbox_media_mcp")
 
@@ -251,6 +252,25 @@ def create_mcp(services: Services) -> FastMCP:
             limit,
         )
 
+    async def tautulli_history_tool(
+        user: str | None = None,
+        rating_key: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        media_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        return await tautulli_history(services, user, rating_key, start_date, end_date, media_type, limit)
+
+    async def tautulli_users_tool() -> dict[str, Any]:
+        return await tautulli_users(services)
+
+    async def tautulli_user_stats_tool(
+        user_id: int | None = None,
+        grouping: str = "monthly",
+    ) -> dict[str, Any]:
+        return await tautulli_user_stats(services, user_id, grouping)
+
     register_tool(mcp, "media_status", READ_ONLY, media_status_tool)
     register_tool(mcp, "radarr_overview", READ_ONLY, radarr_overview_tool)
     register_tool(mcp, "sonarr_overview", READ_ONLY, sonarr_overview_tool)
@@ -265,6 +285,9 @@ def create_mcp(services: Services) -> FastMCP:
     register_tool(mcp, "radarr_queue_action", WRITE, radarr_queue_action_tool)
     register_tool(mcp, "sonarr_queue_action", WRITE, sonarr_queue_action_tool)
     register_tool(mcp, "staleness_report", READ_ONLY, staleness_report_tool)
+    register_tool(mcp, "tautulli_history", READ_ONLY, tautulli_history_tool)
+    register_tool(mcp, "tautulli_users", READ_ONLY, tautulli_users_tool)
+    register_tool(mcp, "tautulli_user_stats", READ_ONLY, tautulli_user_stats_tool)
     return mcp
 
 

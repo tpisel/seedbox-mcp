@@ -70,6 +70,7 @@ def _disk_summary(items: Any) -> list[dict[str, Any]]:
         {
             "path": item.get("path"),
             "free_gb": round(item.get("freeSpace", 0) / 1024**3, 1),
+            "total_gb": round(item.get("totalSpace", 0) / 1024**3, 1),
         }
         for item in items
         if isinstance(item, dict)

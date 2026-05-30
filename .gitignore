@@ -8,3 +8,4 @@ __pycache__/
 Thumbs.db
 todo_human.md
 .env.remote
+.DS_Store
