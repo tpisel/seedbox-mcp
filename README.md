@@ -54,6 +54,17 @@ TAUTULLI_API_KEY=...
 
 Startup logs print a redacted config summary. API keys, Plex tokens, bearer tokens, and request headers are not logged.
 
+## Claude.ai Connection
+
+Claude.ai's MCP connector requires OAuth 2.0. The server implements Authorization Code + PKCE automatically — no extra setup needed beyond a running server with `MCP_PUBLIC_BASE_URL` set.
+
+1. In Claude.ai, add a new MCP integration pointing to `https://<your-host>/mcp`.
+2. Claude.ai will redirect your browser to `https://<your-host>/oauth/authorize`.
+3. Enter your `MCP_BEARER_TOKEN` in the consent form to authorize.
+4. Claude.ai stores the resulting access token (default 1 hour TTL) and refreshes it automatically via a 30-day refresh token.
+
+`MCP_PUBLIC_BASE_URL` must be set to your public HTTPS URL for the OAuth discovery metadata to be correct. The optional `OAUTH_ACCESS_TOKEN_TTL` env var controls the access token lifetime in seconds (default: `3600`).
+
 ## Command Interface
 
 Use the `justfile` as the project interface:

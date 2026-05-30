@@ -7,10 +7,14 @@ from typing import Any
 
 import uvicorn
 from fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.routing import Mount, Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from whatbox_media_mcp.config import Settings, load_settings
+from whatbox_media_mcp.oauth import OAuthStore
 from whatbox_media_mcp.runtime import Services, build_services
 from whatbox_media_mcp.tools.plex import plex_overview
 from whatbox_media_mcp.tools.radarr import (
@@ -54,9 +58,10 @@ DESTRUCTIVE = {
 
 
 class BearerAuthApp:
-    def __init__(self, app: ASGIApp, token: str) -> None:
+    def __init__(self, app: ASGIApp, token: str, oauth_store: OAuthStore | None = None) -> None:
         self.app = app
         self.token = token
+        self.oauth_store = oauth_store
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -81,8 +86,17 @@ class BearerAuthApp:
         await self.app(scope, receive, send)
 
     def _authorized(self, scope: Scope) -> bool:
+        import hmac as _hmac
+
         headers = {key.decode("latin-1").lower(): value.decode("latin-1") for key, value in scope.get("headers", [])}
-        return headers.get("authorization") == f"Bearer {self.token}"
+        auth = headers.get("authorization", "")
+        if auth.startswith("Bearer "):
+            candidate = auth[len("Bearer ") :]
+            if _hmac.compare_digest(candidate, self.token):
+                return True
+            if self.oauth_store is not None:
+                return self.oauth_store.validate_access_token(candidate)
+        return False
 
 
 def create_mcp(services: Services) -> FastMCP:
@@ -268,15 +282,36 @@ def register_tool(
     decorator(func)
 
 
+async def _health(request: Request) -> JSONResponse:
+    return JSONResponse({"ok": True})
+
+
 def create_app(settings: Settings | None = None) -> ASGIApp:
     settings = settings or load_settings()
     services = build_services(settings)
     mcp = create_mcp(services)
     try:
-        app = mcp.http_app(path="/mcp")
+        mcp_app = mcp.http_app(path="/mcp")
     except TypeError:
-        app = mcp.http_app()
-    return BearerAuthApp(app, settings.mcp_bearer_token.get_secret_value())
+        mcp_app = mcp.http_app()
+
+    oauth_store = OAuthStore(
+        bearer_token=settings.mcp_bearer_token.get_secret_value(),
+        base_url=str(settings.mcp_public_base_url).rstrip("/") if settings.mcp_public_base_url else "",
+        access_token_ttl=settings.oauth_access_token_ttl,
+    )
+
+    starlette_app = Starlette(
+        routes=[
+            Route("/.well-known/oauth-authorization-server", oauth_store.handle_discovery),
+            Route("/oauth/authorize", oauth_store.handle_authorize_get, methods=["GET"]),
+            Route("/oauth/authorize", oauth_store.handle_authorize_post, methods=["POST"]),
+            Route("/oauth/token", oauth_store.handle_token, methods=["POST"]),
+            Mount("/", app=mcp_app),
+        ]
+    )
+
+    return BearerAuthApp(starlette_app, settings.mcp_bearer_token.get_secret_value(), oauth_store)
 
 
 def main() -> None:

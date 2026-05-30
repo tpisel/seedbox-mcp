@@ -56,7 +56,7 @@ async def sonarr_overview(
                     "series_title": (
                         item.get("series", {}).get("title")
                         or item.get("seriesTitle")
-                        or series_titles.get(item.get("seriesId"))
+                        or series_titles.get(int(item["seriesId"]) if "seriesId" in item else -1)
                     ),
                     "season_number": item.get("seasonNumber"),
                     "episode_number": item.get("episodeNumber"),

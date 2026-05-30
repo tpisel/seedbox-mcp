@@ -42,6 +42,7 @@ exclude = ["tests"]
 
 [dependency-groups]
 dev = [
+  "httpx2",
   "mypy",
   "pytest",
   "pytest-asyncio",

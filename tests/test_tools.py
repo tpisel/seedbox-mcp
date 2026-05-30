@@ -4,6 +4,7 @@ import pytest
 
 from tests.conftest import FakeArrClient
 from whatbox_media_mcp.runtime import Services
+from whatbox_media_mcp.tools.plex import plex_overview
 from whatbox_media_mcp.tools.radarr import (
     radarr_add_movie,
     radarr_delete_movie,
@@ -17,7 +18,6 @@ from whatbox_media_mcp.tools.sonarr import (
     sonarr_queue_action,
     sonarr_research_series,
 )
-from whatbox_media_mcp.tools.plex import plex_overview
 from whatbox_media_mcp.tools.staleness import staleness_report
 from whatbox_media_mcp.tools.status import media_status
 

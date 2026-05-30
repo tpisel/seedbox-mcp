@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     tautulli_url: HttpUrl | None = None
     tautulli_api_key: SecretStr | None = None
 
+    oauth_access_token_ttl: int = Field(default=3600, gt=0)
+
     @field_validator("sonarr_default_language_profile_id", mode="before")
     @classmethod
     def empty_int_is_none(cls, value: Any) -> Any:

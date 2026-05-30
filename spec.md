@@ -148,6 +148,9 @@ PLEX_TV_SECTION=TV Shows
 TAUTULLI_ENABLED=false
 TAUTULLI_URL=http://127.0.0.1:8181
 TAUTULLI_API_KEY=
+
+# Optional: OAuth access token lifetime in seconds (default: 3600)
+# OAUTH_ACCESS_TOKEN_TTL=3600
 ```
 
 Config requirements:
@@ -379,20 +382,39 @@ These are hard requirements.
 
 ## 8. Authentication Model
 
-Use a simple bearer token for the private MCP endpoint.
+The server supports two auth paths on `/mcp*` endpoints.
 
-Inbound request requirement:
+### 8.1 Static bearer token (Claude Code / local)
 
 ```http
 Authorization: Bearer <MCP_BEARER_TOKEN>
 ```
 
-Implementation notes:
-
-- Reject missing/incorrect bearer token with 401.
+- Reject missing/incorrect token with 401.
 - Do not support unauthenticated mode in production.
-- Local development may allow `MCP_BEARER_TOKEN=dev` but still require a token.
-- Do not implement OAuth in v1.
+- Local development may use `MCP_BEARER_TOKEN=dev` but still requires a token.
+
+### 8.2 OAuth 2.0 Authorization Code + PKCE (Claude.ai)
+
+The server implements a minimal OAuth 2.0 authorization server for Claude.ai compatibility.
+
+Endpoints:
+
+- `GET /.well-known/oauth-authorization-server` — RFC 8414 discovery metadata
+- `GET /oauth/authorize` — consent form (unauthenticated)
+- `POST /oauth/authorize` — validates `MCP_BEARER_TOKEN` entered by the user, issues auth code, redirects
+- `POST /oauth/token` — exchanges auth code (with PKCE) for access + refresh token; also handles `grant_type=refresh_token`
+
+Constraints:
+
+- S256 is the only supported `code_challenge_method`.
+- Auth codes expire after 5 minutes.
+- Access tokens expire after `OAUTH_ACCESS_TOKEN_TTL` seconds (default 3600).
+- Refresh tokens expire after 30 days and are single-use (rotated on each refresh).
+- All state is in-memory; the server does not persist tokens across restarts.
+- The consent form compares the entered token with `MCP_BEARER_TOKEN` using constant-time comparison.
+- All user-supplied values echoed into the consent form HTML are escaped.
+- OAuth endpoints and `/.well-known/*` are excluded from bearer-token auth.
 
 ---
 
