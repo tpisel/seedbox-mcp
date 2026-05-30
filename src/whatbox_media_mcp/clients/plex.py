@@ -46,15 +46,19 @@ class PlexClient:
 
     async def get_sessions(self) -> list[dict[str, Any]]:
         server = self._server()
-        return [
-            {
+        results = []
+        for session in server.sessions():  # type: ignore[no-untyped-call]
+            duration = getattr(session, "duration", None)
+            offset = getattr(session, "viewOffset", None)
+            progress_pct = round(offset / duration * 100, 1) if duration and offset is not None else None
+            results.append({
                 "title": getattr(session, "title", None),
                 "type": getattr(session, "type", None),
                 "user": getattr(getattr(session, "user", None), "title", None),
                 "state": getattr(getattr(session, "session", None), "state", None),
-            }
-            for session in server.sessions()  # type: ignore[no-untyped-call]
-        ]
+                "progress_pct": progress_pct,
+            })
+        return results
 
     async def recently_added(self, section_name: str, limit: int) -> list[dict[str, Any]]:
         section = self._section(section_name)

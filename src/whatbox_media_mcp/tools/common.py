@@ -73,6 +73,8 @@ def _bytes_to_gb(value: Any) -> float | None:
 
 
 def compact_movie(item: dict[str, Any]) -> dict[str, Any]:
+    movie_file = item.get("movieFile") or {}
+    quality = ((movie_file.get("quality") or {}).get("quality") or {}).get("name")
     return {
         "radarr_id": item.get("id"),
         "title": item.get("title"),
@@ -81,6 +83,7 @@ def compact_movie(item: dict[str, Any]) -> dict[str, Any]:
         "imdb_id": item.get("imdbId"),
         "monitored": item.get("monitored"),
         "has_file": item.get("hasFile"),
+        "quality": quality,
         "size_on_disk_gb": _bytes_to_gb(item.get("sizeOnDisk")),
         "path": item.get("path"),
     }
@@ -98,5 +101,6 @@ def compact_series(item: dict[str, Any]) -> dict[str, Any]:
         "episode_file_count": stats.get("episodeFileCount"),
         "episode_count": stats.get("episodeCount"),
         "size_on_disk_gb": _bytes_to_gb(stats.get("sizeOnDisk")),
+        "next_airing": item.get("nextAiring"),
         "path": item.get("path"),
     }
