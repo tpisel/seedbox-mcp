@@ -66,7 +66,7 @@ def compact_queue_item(source: str, item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _bytes_to_gb(value: Any) -> float | None:
+def bytes_to_gb(value: Any) -> float | None:
     if not isinstance(value, (int, float)) or value <= 0:
         return None
     return round(value / 1024**3, 2)
@@ -84,7 +84,7 @@ def compact_movie(item: dict[str, Any]) -> dict[str, Any]:
         "monitored": item.get("monitored"),
         "has_file": item.get("hasFile"),
         "quality": quality,
-        "size_on_disk_gb": _bytes_to_gb(item.get("sizeOnDisk")),
+        "size_on_disk_gb": bytes_to_gb(item.get("sizeOnDisk")),
         "path": item.get("path"),
     }
 
@@ -100,7 +100,115 @@ def compact_series(item: dict[str, Any]) -> dict[str, Any]:
         "monitored": item.get("monitored"),
         "episode_file_count": stats.get("episodeFileCount"),
         "episode_count": stats.get("episodeCount"),
-        "size_on_disk_gb": _bytes_to_gb(stats.get("sizeOnDisk")),
+        "size_on_disk_gb": bytes_to_gb(stats.get("sizeOnDisk")),
         "next_airing": item.get("nextAiring"),
         "path": item.get("path"),
     }
+
+
+# Fields kept in compact Plex item projections used by list-context tools
+# (staleness_report, plex_overview recently_added / basic_staleness_candidates).
+# Dropped vs the full PlexClient._summarize_item shape: file_paths, directors,
+# duration_minutes — none of those are decision-relevant for cleanup or
+# what's-new lists, and they bloat responses.
+_COMPACT_PLEX_FIELDS = (
+    "type",
+    "title",
+    "year",
+    "section",
+    "rating_key",
+    "added_at",
+    "last_viewed_at",
+    "view_count",
+    "size_on_disk_gb",
+)
+
+
+def compact_plex_item(item: dict[str, Any], full: bool = False) -> dict[str, Any]:
+    if full:
+        return dict(item)
+    return {key: item.get(key) for key in _COMPACT_PLEX_FIELDS}
+
+
+# Top-level aggregates kept from Tautulli get_activity in overview contexts.
+_COMPACT_TAUTULLI_ACTIVITY_FIELDS = (
+    "stream_count",
+    "stream_count_direct_play",
+    "stream_count_direct_stream",
+    "stream_count_transcode",
+    "total_bandwidth",
+    "lan_bandwidth",
+    "wan_bandwidth",
+)
+
+# Per-session fields kept: identity, who/what, and the transcode-decision
+# shape. Drops the full video_*/audio_*/subtitle_*/stream_*/transcode_hw_*
+# detail, file paths, credits/genres, IP addresses and email — none of which
+# inform agent decisions in an overview.
+_COMPACT_TAUTULLI_SESSION_FIELDS = (
+    "session_key",
+    "media_type",
+    "title",
+    "parent_title",
+    "grandparent_title",
+    "year",
+    "user",
+    "state",
+    "progress_percent",
+    "view_offset",
+    "duration",
+    "rating_key",
+    "library_name",
+    "player",
+    "platform",
+    "product",
+    "location",
+    "bandwidth",
+    "quality_profile",
+    "transcode_decision",
+    "video_decision",
+    "audio_decision",
+    "subtitle_decision",
+)
+
+
+def compact_tautulli_activity(activity: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(activity, dict):
+        return {}
+    result: dict[str, Any] = {key: activity.get(key) for key in _COMPACT_TAUTULLI_ACTIVITY_FIELDS}
+    sessions = activity.get("sessions") or []
+    result["sessions"] = [_compact_tautulli_session(session) for session in sessions if isinstance(session, dict)]
+    return result
+
+
+def _compact_tautulli_session(session: dict[str, Any]) -> dict[str, Any]:
+    result = {key: session.get(key) for key in _COMPACT_TAUTULLI_SESSION_FIELDS}
+    return {k: v for k, v in result.items() if v not in (None, "")}
+
+
+def sum_size_gb(items: list[dict[str, Any]]) -> float:
+    total = sum(item.get("size_on_disk_gb") or 0.0 for item in items)
+    return round(float(total), 2)
+
+
+def is_exact_title_year_match(
+    query: str | None,
+    query_year: int | None,
+    title: str | None,
+    item_year: int | None,
+) -> tuple[bool, str]:
+    """Return (safe_for_action, match_type) for a search candidate.
+
+    safe_for_action is True only for exact_title_year, or exact_title when
+    the query did not supply a year (so the agent cannot accidentally pick
+    the wrong-year duplicate). Anything else is "fuzzy".
+    """
+    if not query or not title:
+        return False, "fuzzy"
+    if query.strip().casefold() != title.strip().casefold():
+        return False, "fuzzy"
+    if query_year is not None:
+        if item_year == query_year:
+            return True, "exact_title_year"
+        return False, "fuzzy"
+    return True, "exact_title"

@@ -4,10 +4,12 @@ import pytest
 
 from tests.conftest import FakeArrClient
 from whatbox_media_mcp.runtime import Services
+from whatbox_media_mcp.tools.common import compact_tautulli_activity
 from whatbox_media_mcp.tools.plex import plex_overview
 from whatbox_media_mcp.tools.radarr import (
     radarr_add_movie,
     radarr_delete_movie,
+    radarr_delete_movies_batch,
     radarr_queue_action,
     radarr_research_movie,
 )
@@ -15,6 +17,7 @@ from whatbox_media_mcp.tools.search import media_search
 from whatbox_media_mcp.tools.sonarr import (
     sonarr_add_series,
     sonarr_delete_series,
+    sonarr_delete_series_batch,
     sonarr_queue_action,
     sonarr_research_series,
 )
@@ -161,6 +164,105 @@ async def test_plex_overview_returns_sections_and_activity(services: Services) -
     assert isinstance(result["data"]["active_sessions"], list)
 
 
+def test_compact_tautulli_activity_keeps_decision_shape_and_drops_noise() -> None:
+    raw = {
+        "stream_count": "2",
+        "stream_count_direct_play": "0",
+        "stream_count_direct_stream": "0",
+        "stream_count_transcode": "2",
+        "total_bandwidth": 86024,
+        "lan_bandwidth": 0,
+        "wan_bandwidth": 86024,
+        "sessions": [
+            {
+                "session_key": "166",
+                "media_type": "movie",
+                "title": "Stray Dog",
+                "parent_title": "",
+                "grandparent_title": "",
+                "year": "1949",
+                "user": "alice",
+                "state": "paused",
+                "progress_percent": "5",
+                "view_offset": "404000",
+                "duration": "7364731",
+                "rating_key": "7555",
+                "library_name": "Movies",
+                "player": "Chrome",
+                "platform": "chrome",
+                "product": "Plex Web",
+                "location": "wan",
+                "bandwidth": "43012",
+                "quality_profile": "Original",
+                "transcode_decision": "transcode",
+                "video_decision": "copy",
+                "audio_decision": "transcode",
+                "subtitle_decision": "transcode",
+                "directors": ["Akira Kurosawa"],
+                "actors": ["Toshirō Mifune"],
+                "genres": ["Crime", "Drama"],
+                "file": "/home/user/files/movies/Stray Dog.mkv",
+                "file_size": "19207843120",
+                "ip_address": "203.0.113.42",
+                "ip_address_public": "203.0.113.42",
+                "email": "alice@example.com",
+                "machine_id": "examplemachineid0000000000",
+                "transcode_hw_decode": "",
+                "transcode_hw_encode": "",
+                "video_codec_level": "41",
+                "stream_video_bitrate": "20417",
+                "summary": "A detective loses his gun...",
+            }
+        ],
+    }
+    out = compact_tautulli_activity(raw)
+    assert out["stream_count"] == "2"
+    assert out["total_bandwidth"] == 86024
+    assert len(out["sessions"]) == 1
+    session = out["sessions"][0]
+    assert session["title"] == "Stray Dog"
+    assert session["user"] == "alice"
+    assert session["state"] == "paused"
+    assert session["transcode_decision"] == "transcode"
+    assert session["video_decision"] == "copy"
+    assert session["bandwidth"] == "43012"
+    # Empty strings dropped per drop-empties rule.
+    assert "parent_title" not in session
+    assert "grandparent_title" not in session
+    # PII / credits / file paths / transcoder internals all removed.
+    for noisy in (
+        "directors",
+        "actors",
+        "genres",
+        "file",
+        "file_size",
+        "ip_address",
+        "ip_address_public",
+        "email",
+        "machine_id",
+        "transcode_hw_decode",
+        "transcode_hw_encode",
+        "video_codec_level",
+        "stream_video_bitrate",
+        "summary",
+    ):
+        assert noisy not in session
+
+
+def test_compact_tautulli_activity_handles_empty() -> None:
+    assert compact_tautulli_activity({}) == {
+        "stream_count": None,
+        "stream_count_direct_play": None,
+        "stream_count_direct_stream": None,
+        "stream_count_transcode": None,
+        "total_bandwidth": None,
+        "lan_bandwidth": None,
+        "wan_bandwidth": None,
+        "sessions": [],
+    }
+    assert compact_tautulli_activity(None) == {}  # type: ignore[arg-type]
+
+
 @pytest.mark.asyncio
 async def test_staleness_report_returns_expected_categories(services: Services) -> None:
     result = await staleness_report(services, media_type="movies", older_than_days=1, limit=10)
@@ -199,3 +301,318 @@ async def test_research_tools_allow_only_known_commands(services: Services) -> N
     assert sonarr_result["ok"] is False
     assert radarr_result["error_type"] == "validation"
     assert sonarr_result["error_type"] == "validation"
+
+
+# Radarr batch fixture: three movies with known sizes (in bytes).
+def _radarr_batch_movies() -> list[dict]:
+    return [
+        {"id": 1, "title": "Heat", "year": 1995, "path": "/media/Movies/Heat", "sizeOnDisk": 10 * 1024**3},
+        {"id": 2, "title": "Argo", "year": 2012, "path": "/media/Movies/Argo", "sizeOnDisk": 15 * 1024**3},
+        {
+            "id": 3,
+            "title": "The Disaster Artist",
+            "year": 2017,
+            "path": "/media/Movies/The Disaster Artist",
+            "sizeOnDisk": 5 * 1024**3,
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_radarr_delete_movies_batch_dry_run(services: Services) -> None:
+    services.radarr.routes[("GET", "/api/v3/movie")] = _radarr_batch_movies()
+    result = await radarr_delete_movies_batch(services, radarr_ids=[1, 2, 99], confirm=False)
+    assert result["ok"] is True
+    assert services.radarr.deletes == []
+    data = result["data"]
+    assert data["dry_run"] is True
+    assert {row["radarr_id"] for row in data["would_delete"]} == {1, 2}
+    assert data["not_found"] == [99]
+    summary = data["summary"]
+    assert summary == {"requested": 3, "found": 2, "not_found": 1, "estimated_size_gb": 25.0}
+
+
+@pytest.mark.asyncio
+async def test_radarr_delete_movies_batch_proceeds_past_failures(services: Services) -> None:
+    services.radarr.routes[("GET", "/api/v3/movie")] = _radarr_batch_movies()
+    services.radarr.delete_errors["/api/v3/movie/2"] = RuntimeError("boom")
+    result = await radarr_delete_movies_batch(services, radarr_ids=[1, 2, 3, 99], delete_files=True, confirm=True)
+    assert result["ok"] is True
+    data = result["data"]
+    assert data["dry_run"] is False
+    # All three valid ids should have had a DELETE attempted, proving proceed-past-failures.
+    attempted_paths = [path for path, _ in services.radarr.deletes]
+    assert attempted_paths == ["/api/v3/movie/1", "/api/v3/movie/2", "/api/v3/movie/3"]
+    assert {row["radarr_id"] for row in data["deleted"]} == {1, 3}
+    failed_ids = {row["radarr_id"] for row in data["failed"]}
+    assert failed_ids == {2, 99}
+    summary = data["summary"]
+    assert summary["requested"] == 4
+    assert summary["deleted"] == 2
+    assert summary["failed"] == 2
+    # Only successful deletes count toward size freed (Heat 10 GB + Disaster Artist 5 GB = 15 GB).
+    assert summary["total_size_deleted_gb"] == 15.0
+
+
+@pytest.mark.asyncio
+async def test_radarr_delete_movies_batch_passes_query_params(services: Services) -> None:
+    services.radarr.routes[("GET", "/api/v3/movie")] = _radarr_batch_movies()
+    await radarr_delete_movies_batch(
+        services, radarr_ids=[1], delete_files=True, add_import_exclusion=True, confirm=True
+    )
+    _, params = services.radarr.deletes[0]
+    assert params == {"deleteFiles": "true", "addImportExclusion": "true"}
+
+
+@pytest.mark.asyncio
+async def test_radarr_delete_movies_batch_rejects_empty(services: Services) -> None:
+    result = await radarr_delete_movies_batch(services, radarr_ids=[], confirm=True)
+    assert result["ok"] is False
+    assert result["error_type"] == "validation"
+
+
+def _sonarr_batch_series() -> list[dict]:
+    return [
+        {
+            "id": 2,
+            "title": "The Wire",
+            "year": 2002,
+            "path": "/media/TV/The Wire",
+            "statistics": {"sizeOnDisk": 20 * 1024**3},
+        },
+        {
+            "id": 4,
+            "title": "Severance",
+            "year": 2022,
+            "path": "/media/TV/Severance",
+            "statistics": {"sizeOnDisk": 8 * 1024**3},
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sonarr_delete_series_batch_dry_run(services: Services) -> None:
+    services.sonarr.routes[("GET", "/api/v3/series")] = _sonarr_batch_series()
+    result = await sonarr_delete_series_batch(services, sonarr_ids=[2, 4, 99], confirm=False)
+    assert result["ok"] is True
+    assert services.sonarr.deletes == []
+    data = result["data"]
+    assert data["dry_run"] is True
+    assert {row["sonarr_id"] for row in data["would_delete"]} == {2, 4}
+    assert data["not_found"] == [99]
+    assert data["summary"]["estimated_size_gb"] == 28.0
+
+
+@pytest.mark.asyncio
+async def test_sonarr_delete_series_batch_proceeds_past_failures(services: Services) -> None:
+    services.sonarr.routes[("GET", "/api/v3/series")] = _sonarr_batch_series()
+    services.sonarr.delete_errors["/api/v3/series/4"] = RuntimeError("boom")
+    result = await sonarr_delete_series_batch(services, sonarr_ids=[2, 4], delete_files=True, confirm=True)
+    assert result["ok"] is True
+    attempted_paths = [path for path, _ in services.sonarr.deletes]
+    assert attempted_paths == ["/api/v3/series/2", "/api/v3/series/4"]
+    data = result["data"]
+    assert {row["sonarr_id"] for row in data["deleted"]} == {2}
+    assert {row["sonarr_id"] for row in data["failed"]} == {4}
+    assert data["summary"]["total_size_deleted_gb"] == 20.0
+
+
+@pytest.mark.asyncio
+async def test_sonarr_delete_series_batch_passes_query_params(services: Services) -> None:
+    services.sonarr.routes[("GET", "/api/v3/series")] = _sonarr_batch_series()
+    await sonarr_delete_series_batch(
+        services, sonarr_ids=[2], delete_files=True, add_import_exclusion=True, confirm=True
+    )
+    _, params = services.sonarr.deletes[0]
+    assert params == {"deleteFiles": "true", "addImportListExclusion": "true"}
+
+
+# Staleness sort + action-ID tests use a custom PlexClient so we can supply
+# items with controllable timestamps and types.
+class _StalenessPlex:
+    def __init__(self, items: list[dict]) -> None:
+        self._items = items
+
+    async def get_sections(self) -> list[str]:
+        return ["Movies", "TV Shows"]
+
+    async def get_basic_library_items(self, section_name: str, limit: int) -> list[dict]:
+        return [item for item in self._items if item.get("section") == section_name][:limit]
+
+
+@pytest.mark.asyncio
+async def test_staleness_report_attaches_radarr_id(services: Services) -> None:
+    services.radarr.routes[("GET", "/api/v3/movie")] = [
+        {"id": 42, "title": "Argo", "year": 2012, "hasFile": True},
+    ]
+    services.sonarr.routes[("GET", "/api/v3/series")] = []
+    plex_items = [
+        {
+            "type": "movie",
+            "title": "Argo",
+            "year": 2012,
+            "section": "Movies",
+            "rating_key": "100",
+            "added_at": "2024-01-01T00:00:00+00:00",
+            "last_viewed_at": None,
+            "view_count": 0,
+            "size_on_disk_gb": 15.0,
+        },
+        {
+            "type": "movie",
+            "title": "Unknown Indie",
+            "year": 2020,
+            "section": "Movies",
+            "rating_key": "101",
+            "added_at": "2024-01-01T00:00:00+00:00",
+            "last_viewed_at": None,
+            "view_count": 0,
+            "size_on_disk_gb": 2.0,
+        },
+    ]
+    object.__setattr__(services, "plex", _StalenessPlex(plex_items))
+    result = await staleness_report(services, media_type="movies", older_than_days=1)
+    assert result["ok"] is True
+    items = result["data"]["added_long_ago_unwatched"]
+    by_title = {item["title"]: item for item in items}
+    assert by_title["Argo"]["radarr_id"] == 42
+    assert by_title["Argo"]["match_status"] == "matched"
+    assert by_title["Unknown Indie"]["radarr_id"] is None
+    assert by_title["Unknown Indie"]["match_status"] == "unmanaged"
+    # Verbosity trim: directors / file_paths / duration_minutes excluded.
+    assert "directors" not in by_title["Argo"]
+    assert "file_paths" not in by_title["Argo"]
+
+
+@pytest.mark.asyncio
+async def test_staleness_report_sort_staleness_desc(services: Services) -> None:
+    services.radarr.routes[("GET", "/api/v3/movie")] = []
+    services.sonarr.routes[("GET", "/api/v3/series")] = []
+    plex_items = [
+        # Added long ago AND watched recently — most-recent-activity is the watch, so least stale.
+        {
+            "type": "movie",
+            "title": "Recent Watch",
+            "year": 2010,
+            "section": "Movies",
+            "rating_key": "1",
+            "added_at": "2020-01-01T00:00:00+00:00",
+            "last_viewed_at": "2026-05-01T00:00:00+00:00",
+            "view_count": 1,
+            "size_on_disk_gb": 1.0,
+        },
+        # Added recently, never watched.
+        {
+            "type": "movie",
+            "title": "Recent Add",
+            "year": 2024,
+            "section": "Movies",
+            "rating_key": "2",
+            "added_at": "2025-12-01T00:00:00+00:00",
+            "last_viewed_at": None,
+            "view_count": 0,
+            "size_on_disk_gb": 1.0,
+        },
+        # Truly stale: added long ago, never watched.
+        {
+            "type": "movie",
+            "title": "Truly Stale",
+            "year": 2005,
+            "section": "Movies",
+            "rating_key": "3",
+            "added_at": "2020-01-01T00:00:00+00:00",
+            "last_viewed_at": None,
+            "view_count": 0,
+            "size_on_disk_gb": 1.0,
+        },
+    ]
+    object.__setattr__(services, "plex", _StalenessPlex(plex_items))
+    result = await staleness_report(services, media_type="movies", older_than_days=30)
+    # All three qualify for one of the two buckets. Default sort = staleness_desc.
+    unwatched = result["data"]["added_long_ago_unwatched"]
+    # Truly Stale (added 2020) comes before Recent Add (added 2025) in the unwatched bucket.
+    titles = [i["title"] for i in unwatched]
+    assert titles.index("Truly Stale") < titles.index("Recent Add")
+    # Recent Watch is in watched_long_ago bucket only if its last_viewed_at < cutoff. With
+    # older_than_days=30 from 2026-06-01, cutoff is 2026-05-02 and last_viewed_at is
+    # 2026-05-01 — so it just qualifies as watched_long_ago.
+    watched = result["data"]["watched_long_ago"]
+    assert any(i["title"] == "Recent Watch" for i in watched)
+
+
+@pytest.mark.asyncio
+async def test_staleness_report_sort_size_desc_limit_after_sort(services: Services) -> None:
+    services.radarr.routes[("GET", "/api/v3/movie")] = []
+    services.sonarr.routes[("GET", "/api/v3/series")] = []
+    plex_items = [
+        {
+            "type": "movie",
+            "title": f"Movie {i}",
+            "year": 2000 + i,
+            "section": "Movies",
+            "rating_key": str(i),
+            "added_at": "2020-01-01T00:00:00+00:00",
+            "last_viewed_at": None,
+            "view_count": 0,
+            "size_on_disk_gb": float(i),
+        }
+        for i in range(1, 6)
+    ]
+    object.__setattr__(services, "plex", _StalenessPlex(plex_items))
+    result = await staleness_report(services, media_type="movies", older_than_days=30, limit=2, sort="size_desc")
+    titles = [i["title"] for i in result["data"]["added_long_ago_unwatched"]]
+    # Limit applied after sort: top two by size, not alphabetically first two.
+    assert titles == ["Movie 5", "Movie 4"]
+
+
+@pytest.mark.asyncio
+async def test_staleness_report_rejects_unknown_sort(services: Services) -> None:
+    services.radarr.routes[("GET", "/api/v3/movie")] = []
+    services.sonarr.routes[("GET", "/api/v3/series")] = []
+    result = await staleness_report(services, sort="random")
+    assert result["ok"] is False
+    assert result["error_type"] == "validation"
+
+
+@pytest.mark.asyncio
+async def test_media_search_safe_for_action_exact_title_year(services: Services) -> None:
+    result = await media_search(services, "Heat", year=1995, include_external_lookup=False, limit=10)
+    radarr = next(c for c in result["data"]["candidates"] if c["source"] == "radarr")
+    assert radarr["safe_for_action"] is True
+    assert radarr["match_type"] == "exact_title_year"
+
+
+@pytest.mark.asyncio
+async def test_media_search_safe_for_action_year_mismatch_not_safe(services: Services) -> None:
+    # The Radarr fixture has Heat (1995). Query with wrong year should not be safe.
+    result = await media_search(services, "Heat", year=2024, include_external_lookup=False, limit=10)
+    radarr_matches = [c for c in result["data"]["candidates"] if c["source"] == "radarr"]
+    # year filter may exclude it entirely; if any remain they must be unsafe.
+    for c in radarr_matches:
+        assert c["safe_for_action"] is False
+
+
+@pytest.mark.asyncio
+async def test_media_search_lookup_candidates_never_safe(services: Services) -> None:
+    result = await media_search(services, "Heat", year=1995, limit=10)
+    for candidate in result["data"]["candidates"]:
+        if candidate["source"] in {"radarr_lookup", "sonarr_lookup"}:
+            assert candidate["safe_for_action"] is False
+
+
+@pytest.mark.asyncio
+async def test_media_search_drops_directors_when_no_filter(services: Services) -> None:
+    result = await media_search(services, "Heat", limit=10)
+    plex_candidates = [c for c in result["data"]["candidates"] if c["source"] == "plex"]
+    assert plex_candidates
+    for candidate in plex_candidates:
+        assert "directors" not in candidate
+
+
+@pytest.mark.asyncio
+async def test_media_search_includes_directors_when_director_filter_set(services: Services) -> None:
+    result = await media_search(services, "Heat", director="Michael Mann", limit=10)
+    plex_candidates = [c for c in result["data"]["candidates"] if c["source"] == "plex"]
+    assert plex_candidates
+    for candidate in plex_candidates:
+        assert "directors" in candidate

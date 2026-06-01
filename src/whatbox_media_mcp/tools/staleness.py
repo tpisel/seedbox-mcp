@@ -8,10 +8,13 @@ from whatbox_media_mcp.schemas import ToolResponse
 from whatbox_media_mcp.tools.common import (
     clamp_limit,
     compact_movie,
+    compact_plex_item,
     compact_queue_item,
     compact_series,
     safe_tool,
 )
+
+VALID_SORTS = {"staleness_desc", "size_desc", "title_asc"}
 
 
 async def staleness_report(
@@ -22,8 +25,15 @@ async def staleness_report(
     include_unmanaged: bool = True,
     include_missing: bool = True,
     limit: int = 100,
+    sort: str = "staleness_desc",
 ) -> dict[str, Any]:
     async def run() -> dict[str, Any]:
+        if sort not in VALID_SORTS:
+            return ToolResponse.failure(
+                "validation",
+                "Unsupported sort.",
+                {"allowed": sorted(VALID_SORTS)},
+            )
         bounded = clamp_limit(limit)
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
         sections = _sections(services, media_type)
@@ -38,37 +48,61 @@ async def staleness_report(
         radarr_queue = await services.radarr.get("/api/v3/queue", {"page": 1, "pageSize": bounded})
         sonarr_queue = await services.sonarr.get("/api/v3/queue", {"page": 1, "pageSize": bounded})
 
-        data: dict[str, Any] = {"older_than_days": older_than_days, "limit": bounded}
+        radarr_by_key = {
+            (str(m.get("title", "")).casefold(), m.get("year")): m.get("id")
+            for m in radarr_movies
+            if m.get("title") and m.get("id")
+        }
+        sonarr_by_key = {
+            (str(s.get("title", "")).casefold(), s.get("year")): s.get("id")
+            for s in sonarr_series
+            if s.get("title") and s.get("id")
+        }
+
+        data: dict[str, Any] = {"older_than_days": older_than_days, "limit": bounded, "sort": sort}
         if include_unwatched:
-            data["added_long_ago_unwatched"] = [
+            unwatched_raw = [
                 item
                 for item in plex_items
                 if not item.get("view_count")
                 and not item.get("last_viewed_at")
                 and _before(item.get("added_at"), cutoff)
-            ][:bounded]
-            data["watched_long_ago"] = [
+            ]
+            data["added_long_ago_unwatched"] = _sort_and_slice(
+                [_annotate(item, radarr_by_key, sonarr_by_key) for item in unwatched_raw],
+                sort,
+                bounded,
+            )
+            watched_raw = [
                 item
                 for item in plex_items
                 if item.get("last_viewed_at") and _before(item.get("last_viewed_at"), cutoff)
-            ][:bounded]
+            ]
+            data["watched_long_ago"] = _sort_and_slice(
+                [_annotate(item, radarr_by_key, sonarr_by_key) for item in watched_raw],
+                sort,
+                bounded,
+            )
         if include_unmanaged:
-            managed_titles = {str(item.get("title", "")).lower() for item in [*radarr_movies, *sonarr_series]}
-            data["plex_unmanaged"] = [
-                item for item in plex_items if str(item.get("title", "")).lower() not in managed_titles
-            ][:bounded]
+            managed_titles = {str(item.get("title", "")).casefold() for item in [*radarr_movies, *sonarr_series]}
+            unmanaged_raw = [item for item in plex_items if str(item.get("title", "")).casefold() not in managed_titles]
+            data["plex_unmanaged"] = _sort_and_slice(
+                [compact_plex_item(item) for item in unmanaged_raw],
+                sort,
+                bounded,
+            )
         if include_missing:
-            plex_titles = {str(item.get("title", "")).lower() for item in plex_items}
+            plex_titles = {str(item.get("title", "")).casefold() for item in plex_items}
             data["managed_missing_from_plex"] = (
                 [
                     compact_movie(item)
                     for item in radarr_movies
-                    if not item.get("hasFile") or str(item.get("title", "")).lower() not in plex_titles
+                    if not item.get("hasFile") or str(item.get("title", "")).casefold() not in plex_titles
                 ]
                 + [
                     compact_series(item)
                     for item in sonarr_series
-                    if str(item.get("title", "")).lower() not in plex_titles
+                    if str(item.get("title", "")).casefold() not in plex_titles
                 ]
             )[:bounded]
         data["queue_warnings"] = [
@@ -77,6 +111,56 @@ async def staleness_report(
         return ToolResponse.success(data)
 
     return await safe_tool(run)
+
+
+def _annotate(
+    item: dict[str, Any],
+    radarr_by_key: dict[tuple[str, Any], Any],
+    sonarr_by_key: dict[tuple[str, Any], Any],
+) -> dict[str, Any]:
+    compact = compact_plex_item(item)
+    key = (str(compact.get("title", "")).casefold(), compact.get("year"))
+    if compact.get("type") == "show":
+        sonarr_id = sonarr_by_key.get(key)
+        compact["sonarr_id"] = sonarr_id
+        compact["match_status"] = "matched" if sonarr_id else "unmanaged"
+    else:
+        radarr_id = radarr_by_key.get(key)
+        compact["radarr_id"] = radarr_id
+        compact["match_status"] = "matched" if radarr_id else "unmanaged"
+    return compact
+
+
+def _sort_and_slice(items: list[dict[str, Any]], sort: str, limit: int) -> list[dict[str, Any]]:
+    if sort == "size_desc":
+        items.sort(key=lambda i: i.get("size_on_disk_gb") or -1.0, reverse=True)
+    elif sort == "title_asc":
+        items.sort(key=lambda i: (i.get("title") or "").casefold())
+    else:  # staleness_desc — oldest most-recent-activity first
+        items.sort(key=_staleness_sort_key)
+    return items[:limit]
+
+
+def _staleness_sort_key(item: dict[str, Any]) -> tuple[int, float]:
+    added = _parse_iso(item.get("added_at"))
+    viewed = _parse_iso(item.get("last_viewed_at"))
+    timestamps = [t for t in (added, viewed) if t is not None]
+    if not timestamps:
+        # Items with no timestamps sort last (group 1).
+        return (1, 0.0)
+    return (0, max(timestamps))
+
+
+def _parse_iso(value: Any) -> float | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.timestamp()
 
 
 def _sections(services: Services, media_type: str) -> list[str]:

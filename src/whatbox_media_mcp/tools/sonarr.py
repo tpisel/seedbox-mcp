@@ -7,11 +7,13 @@ from whatbox_media_mcp.runtime import Services
 from whatbox_media_mcp.schemas import ToolResponse
 from whatbox_media_mcp.tools.common import (
     bool_params,
+    bytes_to_gb,
     clamp_limit,
     compact_queue_item,
     compact_series,
     pick_title,
     safe_tool,
+    sum_size_gb,
 )
 
 SONARR_QUEUE_ACTIONS = {"remove", "blocklist"}
@@ -134,11 +136,13 @@ async def sonarr_delete_series(
         series = await services.sonarr.get(f"/api/v3/series/{sonarr_id}")
         if not isinstance(series, dict):
             raise MediaMcpError("not_found", "Sonarr series was not found.", {"sonarr_id": sonarr_id})
+        stats = series.get("statistics") or {}
         preview = {
             "sonarr_id": sonarr_id,
             "title": series.get("title"),
             "path": series.get("path"),
             "monitored": series.get("monitored"),
+            "size_on_disk_gb": bytes_to_gb(stats.get("sizeOnDisk")),
             "delete_files": delete_files,
             "add_import_exclusion": add_import_exclusion,
         }
@@ -150,6 +154,113 @@ async def sonarr_delete_series(
             bool_params({"deleteFiles": delete_files, "addImportListExclusion": add_import_exclusion}),
         )
         return ToolResponse.success({"dry_run": False, "deleted": preview}, warnings)
+
+    return await safe_tool(run)
+
+
+async def sonarr_delete_series_batch(
+    services: Services,
+    sonarr_ids: list[int],
+    delete_files: bool = True,
+    add_import_exclusion: bool = False,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    async def run() -> dict[str, Any]:
+        if not sonarr_ids:
+            raise MediaMcpError("validation", "sonarr_delete_series_batch requires a non-empty sonarr_ids list.")
+        if any(not isinstance(sid, int) or sid <= 0 for sid in sonarr_ids):
+            raise MediaMcpError(
+                "validation",
+                "sonarr_delete_series_batch sonarr_ids must be positive integers.",
+            )
+
+        series_list = _as_list(await services.sonarr.get("/api/v3/series"))
+        by_id = {int(s["id"]): s for s in series_list if "id" in s}
+
+        previews: list[dict[str, Any]] = []
+        not_found: list[int] = []
+        for sid in sonarr_ids:
+            series = by_id.get(sid)
+            if series is None:
+                not_found.append(sid)
+                continue
+            stats = series.get("statistics") or {}
+            previews.append(
+                {
+                    "sonarr_id": sid,
+                    "title": series.get("title"),
+                    "year": series.get("year"),
+                    "path": series.get("path"),
+                    "size_on_disk_gb": bytes_to_gb(stats.get("sizeOnDisk")),
+                }
+            )
+
+        warnings: list[str] = []
+        if delete_files:
+            warnings.append("delete_files=true asks Sonarr to delete media files for all selected items.")
+
+        if not confirm:
+            return ToolResponse.success(
+                {
+                    "dry_run": True,
+                    "would_delete": previews,
+                    "not_found": not_found,
+                    "delete_files": delete_files,
+                    "add_import_exclusion": add_import_exclusion,
+                    "summary": {
+                        "requested": len(sonarr_ids),
+                        "found": len(previews),
+                        "not_found": len(not_found),
+                        "estimated_size_gb": sum_size_gb(previews),
+                    },
+                },
+                warnings,
+            )
+
+        params = bool_params({"deleteFiles": delete_files, "addImportListExclusion": add_import_exclusion})
+        deleted: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = [{"sonarr_id": sid, "error_type": "not_found"} for sid in not_found]
+
+        for preview in previews:
+            sid = int(preview["sonarr_id"])
+            try:
+                await services.sonarr.delete(f"/api/v3/series/{sid}", params)
+                deleted.append(preview)
+            except MediaMcpError as exc:
+                failed.append(
+                    {
+                        "sonarr_id": sid,
+                        "title": preview.get("title"),
+                        "error_type": exc.error_type,
+                        "message": exc.message,
+                    }
+                )
+            except Exception as exc:
+                failed.append(
+                    {
+                        "sonarr_id": sid,
+                        "title": preview.get("title"),
+                        "error_type": "upstream_error",
+                        "message": str(exc),
+                    }
+                )
+
+        return ToolResponse.success(
+            {
+                "dry_run": False,
+                "deleted": deleted,
+                "failed": failed,
+                "delete_files": delete_files,
+                "add_import_exclusion": add_import_exclusion,
+                "summary": {
+                    "requested": len(sonarr_ids),
+                    "deleted": len(deleted),
+                    "failed": len(failed),
+                    "total_size_deleted_gb": sum_size_gb(deleted),
+                },
+            },
+            warnings,
+        )
 
     return await safe_tool(run)
 

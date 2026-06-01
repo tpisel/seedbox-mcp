@@ -7,11 +7,13 @@ from whatbox_media_mcp.runtime import Services
 from whatbox_media_mcp.schemas import ToolResponse
 from whatbox_media_mcp.tools.common import (
     bool_params,
+    bytes_to_gb,
     clamp_limit,
     compact_movie,
     compact_queue_item,
     pick_title,
     safe_tool,
+    sum_size_gb,
 )
 
 RADARR_QUEUE_ACTIONS = {"remove", "blocklist"}
@@ -112,6 +114,7 @@ async def radarr_delete_movie(
             "year": movie.get("year"),
             "path": movie.get("path"),
             "monitored": movie.get("monitored"),
+            "size_on_disk_gb": bytes_to_gb(movie.get("sizeOnDisk")),
             "delete_files": delete_files,
             "add_import_exclusion": add_import_exclusion,
         }
@@ -123,6 +126,114 @@ async def radarr_delete_movie(
             bool_params({"deleteFiles": delete_files, "addImportExclusion": add_import_exclusion}),
         )
         return ToolResponse.success({"dry_run": False, "deleted": preview}, warnings)
+
+    return await safe_tool(run)
+
+
+async def radarr_delete_movies_batch(
+    services: Services,
+    radarr_ids: list[int],
+    delete_files: bool = True,
+    add_import_exclusion: bool = False,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    async def run() -> dict[str, Any]:
+        if not radarr_ids:
+            raise MediaMcpError("validation", "radarr_delete_movies_batch requires a non-empty radarr_ids list.")
+        if any(not isinstance(rid, int) or rid <= 0 for rid in radarr_ids):
+            raise MediaMcpError(
+                "validation",
+                "radarr_delete_movies_batch radarr_ids must be positive integers.",
+            )
+
+        # One bulk fetch is cheaper than N single GETs and matches what
+        # staleness_report does already.
+        movies = _as_list(await services.radarr.get("/api/v3/movie"))
+        by_id = {int(m["id"]): m for m in movies if "id" in m}
+
+        previews: list[dict[str, Any]] = []
+        not_found: list[int] = []
+        for rid in radarr_ids:
+            movie = by_id.get(rid)
+            if movie is None:
+                not_found.append(rid)
+                continue
+            previews.append(
+                {
+                    "radarr_id": rid,
+                    "title": movie.get("title"),
+                    "year": movie.get("year"),
+                    "path": movie.get("path"),
+                    "size_on_disk_gb": bytes_to_gb(movie.get("sizeOnDisk")),
+                }
+            )
+
+        warnings: list[str] = []
+        if delete_files:
+            warnings.append("delete_files=true asks Radarr to delete media files for all selected items.")
+
+        if not confirm:
+            return ToolResponse.success(
+                {
+                    "dry_run": True,
+                    "would_delete": previews,
+                    "not_found": not_found,
+                    "delete_files": delete_files,
+                    "add_import_exclusion": add_import_exclusion,
+                    "summary": {
+                        "requested": len(radarr_ids),
+                        "found": len(previews),
+                        "not_found": len(not_found),
+                        "estimated_size_gb": sum_size_gb(previews),
+                    },
+                },
+                warnings,
+            )
+
+        params = bool_params({"deleteFiles": delete_files, "addImportExclusion": add_import_exclusion})
+        deleted: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = [{"radarr_id": rid, "error_type": "not_found"} for rid in not_found]
+
+        for preview in previews:
+            rid = int(preview["radarr_id"])
+            try:
+                await services.radarr.delete(f"/api/v3/movie/{rid}", params)
+                deleted.append(preview)
+            except MediaMcpError as exc:
+                failed.append(
+                    {
+                        "radarr_id": rid,
+                        "title": preview.get("title"),
+                        "error_type": exc.error_type,
+                        "message": exc.message,
+                    }
+                )
+            except Exception as exc:  # upstream client may raise non-MediaMcpError
+                failed.append(
+                    {
+                        "radarr_id": rid,
+                        "title": preview.get("title"),
+                        "error_type": "upstream_error",
+                        "message": str(exc),
+                    }
+                )
+
+        return ToolResponse.success(
+            {
+                "dry_run": False,
+                "deleted": deleted,
+                "failed": failed,
+                "delete_files": delete_files,
+                "add_import_exclusion": add_import_exclusion,
+                "summary": {
+                    "requested": len(radarr_ids),
+                    "deleted": len(deleted),
+                    "failed": len(failed),
+                    "total_size_deleted_gb": sum_size_gb(deleted),
+                },
+            },
+            warnings,
+        )
 
     return await safe_tool(run)
 

@@ -21,13 +21,19 @@ or on an attribute like genre. Use `include_external_lookup` and `include_existi
 results from the general TMDB database or just the existing seedbox services respectively. For \
 example, set `include_external_lookup` to False if asked if we have a film, or if finding an \
 internal ID to delete something. Narrow on `types` to reduce noise where possible. This tool \
-returns all available internal IDs you'll need for other tools.
+returns all available internal IDs you'll need for other tools. For destructive actions, only \
+act automatically on candidates where `safe_for_action` is true; if the only match is fuzzy, \
+present the list and ask the user to pick.
 
-Unless specified otherwise, delete requests should delete the file and not blocklist the release.
+Unless specified otherwise, delete requests should delete the file and not blocklist the release. \
+When the user asks to remove several items, prefer `radarr_delete_movies_batch` / \
+`sonarr_delete_series_batch` over repeating the single-item tool. `staleness_report` items \
+already include `radarr_id`/`sonarr_id`, so feed them straight into the delete tool without a \
+follow-up `media_search`.
 
-`tautulli_history_tool` provides recent user activity.
+`tautulli_history` provides recent user activity.
 
-`plex_library_size_tool` shows the library size. When it gets past 3.35TB we might be at the limit \
+`plex_library_size` shows the library size. When it gets past 3.35TB we might be at the limit \
 and this could cause stuck queues.
 
 Rules:

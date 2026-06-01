@@ -20,6 +20,7 @@ from whatbox_media_mcp.tools.plex import plex_library_size, plex_overview
 from whatbox_media_mcp.tools.radarr import (
     radarr_add_movie,
     radarr_delete_movie,
+    radarr_delete_movies_batch,
     radarr_overview,
     radarr_queue_action,
     radarr_research_movie,
@@ -28,6 +29,7 @@ from whatbox_media_mcp.tools.search import media_search
 from whatbox_media_mcp.tools.sonarr import (
     sonarr_add_series,
     sonarr_delete_series,
+    sonarr_delete_series_batch,
     sonarr_overview,
     sonarr_queue_action,
     sonarr_research_series,
@@ -137,7 +139,7 @@ def create_mcp(services: Services) -> FastMCP:
 
     async def plex_library_size_tool(section: str = "all") -> dict[str, Any]:
         """Returns the size of the library in GB
-        
+
         section values: all, movies, tv."""
         return await plex_library_size(services, section)
 
@@ -189,10 +191,25 @@ def create_mcp(services: Services) -> FastMCP:
             genre is a substring match (e.g. "Drama" matches "Drama", "Drama/Thriller").
 
         Attribute filters suppress external lookup (include_external_lookup is ignored when filters are set).
+
+        Each candidate includes match_type and safe_for_action. Act automatically on candidates only
+        where safe_for_action is true (exact title match, plus year match if a year was supplied in
+        the query). For everything else, present candidates to the user and ask for disambiguation
+        before any destructive call.
         """
         return await media_search(
-            services, query, types, include_existing, include_external_lookup, limit,
-            director=director, actor=actor, genre=genre, language=language, year=year, country=country,
+            services,
+            query,
+            types,
+            include_existing,
+            include_external_lookup,
+            limit,
+            director=director,
+            actor=actor,
+            genre=genre,
+            language=language,
+            year=year,
+            country=country,
         )
 
     async def radarr_add_movie_tool(
@@ -323,16 +340,41 @@ def create_mcp(services: Services) -> FastMCP:
         add_import_exclusion: bool = False,
         confirm: bool = False,
     ) -> dict[str, Any]:
-        """Remove a movie from Radarr. Use media_search (include_external_lookup=false) to get radarr_id.
+        """Remove a single movie from Radarr. For multiple, use radarr_delete_movies_batch.
+
+        Identify radarr_id via media_search with include_external_lookup=false and act only on
+        candidates where safe_for_action is true.
 
         delete_files: false removes the movie from Radarr management but leaves the
           file on disk. Typically file itself should be deleted on a delete request.
         add_import_exclusion: prevents Radarr from re-importing or re-monitoring this movie
           after a future library scan. Set to true when you do not want it re-added automatically.
-        confirm: false (default) is a dry run — shows what would be removed without acting.
-          Set to true to perform the deletion.
+        confirm: false (default) is a strict dry run — returns a preview including size_on_disk_gb
+          and performs no upstream call. Set to true to execute the deletion.
         """
         return await radarr_delete_movie(services, radarr_id, delete_files, add_import_exclusion, confirm)
+
+    async def radarr_delete_movies_batch_tool(
+        radarr_ids: list[int],
+        delete_files: bool = True,
+        add_import_exclusion: bool = False,
+        confirm: bool = False,
+    ) -> dict[str, Any]:
+        """Remove multiple movies from Radarr in one call.
+
+        Each id must be the Radarr internal id (not tmdb_id). Resolve ids via media_search with
+        include_external_lookup=false and act only on candidates where safe_for_action is true.
+
+        confirm=false returns a dry-run preview: per-item rows under would_delete, any unknown ids
+        under not_found, and a summary including estimated_size_gb.
+        confirm=true executes deletions sequentially. Failures do not stop the run; each is collected
+        under failed[] alongside its error_type, and the summary reports total_size_deleted_gb for
+        successful items only.
+
+        delete_files / add_import_exclusion apply to every selected item — see radarr_delete_movie
+        for semantics.
+        """
+        return await radarr_delete_movies_batch(services, radarr_ids, delete_files, add_import_exclusion, confirm)
 
     async def sonarr_delete_series_tool(
         sonarr_id: int,
@@ -340,18 +382,41 @@ def create_mcp(services: Services) -> FastMCP:
         add_import_exclusion: bool = False,
         confirm: bool = False,
     ) -> dict[str, Any]:
-        """Remove a series from Sonarr. Use media_search (include_external_lookup=false) to get sonarr_id.
+        """Remove a single series from Sonarr. For multiple, use sonarr_delete_series_batch.
 
-        delete_files: false removes the series from Sonarr management but leaves files
-          on disk.
+        Identify sonarr_id via media_search with include_external_lookup=false and act only on
+        candidates where safe_for_action is true.
+
+        delete_files: false removes the series from Sonarr management but leaves files on disk.
           Typically the files themselves should be deleted on a delete request.
         add_import_exclusion: prevents Sonarr from re-importing or re-monitoring this series
           after a future library scan. Set to true when you do not want it re-added automatically.
-        confirm: false (default) is a dry run — shows what would be removed without acting.
-          Set to true to perform the deletion.
+        confirm: false (default) is a strict dry run — returns a preview including size_on_disk_gb
+          and performs no upstream call. Set to true to execute the deletion.
         """
         return await sonarr_delete_series(services, sonarr_id, delete_files, add_import_exclusion, confirm)
 
+    async def sonarr_delete_series_batch_tool(
+        sonarr_ids: list[int],
+        delete_files: bool = True,
+        add_import_exclusion: bool = False,
+        confirm: bool = False,
+    ) -> dict[str, Any]:
+        """Remove multiple series from Sonarr in one call.
+
+        Each id must be the Sonarr internal id (not tvdb_id). Resolve ids via media_search with
+        include_external_lookup=false and act only on candidates where safe_for_action is true.
+
+        confirm=false returns a dry-run preview: per-item rows under would_delete, any unknown ids
+        under not_found, and a summary including estimated_size_gb.
+        confirm=true executes deletions sequentially. Failures do not stop the run; each is collected
+        under failed[] alongside its error_type, and the summary reports total_size_deleted_gb for
+        successful items only.
+
+        delete_files / add_import_exclusion apply to every selected item — see sonarr_delete_series
+        for semantics.
+        """
+        return await sonarr_delete_series_batch(services, sonarr_ids, delete_files, add_import_exclusion, confirm)
 
     async def staleness_report_tool(
         media_type: str = "all",
@@ -360,10 +425,29 @@ def create_mcp(services: Services) -> FastMCP:
         include_unmanaged: bool = False,
         include_missing: bool = False,
         limit: int = 100,
+        sort: str = "staleness_desc",
     ) -> dict[str, Any]:
         """Lists items that have not been watched for a while.
-        
-        media_type values: all, movies, tv."""
+
+        media_type values: all, movies, tv.
+
+        Buckets (when include_unwatched=true):
+          added_long_ago_unwatched — view_count is zero AND last_viewed_at is null AND
+                                     added_at is older than older_than_days.
+          watched_long_ago         — last_viewed_at is older than older_than_days
+                                     (regardless of when the item was added).
+
+        Each item in those buckets includes radarr_id or sonarr_id (joined by exact
+        title+year against the Radarr/Sonarr libraries) and match_status. Items with
+        match_status="unmanaged" can be deleted via Plex only, not Radarr/Sonarr.
+
+        sort values:
+          staleness_desc (default) — oldest most-recent-activity first (sorted by
+            max(added_at, last_viewed_at) ascending). Items with neither timestamp sort last.
+          size_desc — largest size_on_disk_gb first, nulls last.
+          title_asc — alphabetical.
+        limit is applied after sort.
+        """
         return await staleness_report(
             services,
             media_type,
@@ -372,6 +456,7 @@ def create_mcp(services: Services) -> FastMCP:
             include_unmanaged,
             include_missing,
             limit,
+            sort,
         )
 
     async def tautulli_history_tool(
@@ -411,7 +496,9 @@ def create_mcp(services: Services) -> FastMCP:
     register_tool(mcp, "sonarr_add_series", WRITE, sonarr_add_series_tool)
     register_tool(mcp, "sonarr_research_series", WRITE, sonarr_research_series_tool)
     register_tool(mcp, "radarr_delete_movie", DESTRUCTIVE, radarr_delete_movie_tool)
+    register_tool(mcp, "radarr_delete_movies_batch", DESTRUCTIVE, radarr_delete_movies_batch_tool)
     register_tool(mcp, "sonarr_delete_series", DESTRUCTIVE, sonarr_delete_series_tool)
+    register_tool(mcp, "sonarr_delete_series_batch", DESTRUCTIVE, sonarr_delete_series_batch_tool)
     register_tool(mcp, "radarr_queue_action", WRITE, radarr_queue_action_tool)
     register_tool(mcp, "sonarr_queue_action", WRITE, sonarr_queue_action_tool)
     register_tool(mcp, "staleness_report", READ_ONLY, staleness_report_tool)

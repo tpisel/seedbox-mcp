@@ -14,6 +14,9 @@ class FakeArrClient:
         self.routes = routes or {}
         self.posts: list[tuple[str, dict[str, Any]]] = []
         self.deletes: list[tuple[str, dict[str, Any] | None]] = []
+        # Mapping of path -> Exception. When set, delete(path, ...) records the
+        # call (so callers can assert it was attempted) and then raises.
+        self.delete_errors: dict[str, Exception] = {}
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         key = ("GET", path)
@@ -30,6 +33,8 @@ class FakeArrClient:
 
     async def delete(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
         self.deletes.append((path, params))
+        if path in self.delete_errors:
+            raise self.delete_errors[path]
         return self.routes.get(("DELETE", path))
 
 
@@ -51,14 +56,21 @@ class FakePlexClient:
             }
         ][:limit]
 
-    async def search(self, section_name: str, query: str, limit: int) -> list[dict[str, Any]]:
+    async def search(
+        self,
+        section_name: str,
+        query: str | None = None,
+        limit: int = 10,
+        plex_filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         return [
             {
                 "type": "movie",
-                "title": query,
+                "title": query or "",
                 "year": 1995,
                 "section": section_name,
                 "rating_key": "1",
+                "directors": ["Michael Mann"],
             }
         ][:limit]
 

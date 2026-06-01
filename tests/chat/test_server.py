@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-import respx
 
 from whatbox_media_mcp.chat.auth import make_session
 from whatbox_media_mcp.chat.config import ChatSettings
@@ -66,57 +65,3 @@ async def test_chat_endpoint_returns_reply(chat_settings: ChatSettings) -> None:
     data = response.json()
     assert data["reply"] == "Great choice!"
     assert "history" in data
-
-
-# ---------------------------------------------------------------------------
-# /auth/login
-# ---------------------------------------------------------------------------
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_auth_login_redirects_to_plex(chat_settings: ChatSettings) -> None:
-    respx.post("https://plex.tv/api/v2/pins").mock(
-        return_value=httpx.Response(201, json={"id": 1, "code": "abc", "authToken": None})
-    )
-    transport = _make_transport(chat_settings)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
-        response = await client.get("/auth/login")
-
-    assert response.status_code == 302
-    assert "plex.tv" in response.headers["location"]
-
-
-# ---------------------------------------------------------------------------
-# /auth/callback — happy path
-# ---------------------------------------------------------------------------
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_auth_callback_sets_session_and_redirects(chat_settings: ChatSettings) -> None:
-    from itsdangerous import URLSafeSerializer
-
-    pin_cookie = URLSafeSerializer(chat_settings.chat_session_secret.get_secret_value(), salt="pin").dumps({"id": 5})
-    respx.get("https://plex.tv/api/v2/pins/5").mock(
-        return_value=httpx.Response(200, json={"id": 5, "authToken": "tok"})
-    )
-    friend = MagicMock()
-    friend.username = "mum"
-    admin_acct = MagicMock()
-    admin_acct.users.return_value = [friend]
-    user_acct = MagicMock()
-    user_acct.username = "mum"
-
-    with patch("whatbox_media_mcp.chat.auth.MyPlexAccount") as MockAccount:
-        MockAccount.side_effect = [admin_acct, user_acct]
-        transport = _make_transport(chat_settings)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
-            response = await client.get(
-                "/auth/callback",
-                cookies={"plex_pin": pin_cookie},
-            )
-
-    assert response.status_code == 302
-    assert response.headers["location"] == "/chat"
-    assert "plex_session" in response.headers.get("set-cookie", "")

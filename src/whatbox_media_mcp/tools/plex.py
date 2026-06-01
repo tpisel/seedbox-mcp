@@ -4,7 +4,13 @@ from typing import Any
 
 from whatbox_media_mcp.runtime import Services
 from whatbox_media_mcp.schemas import ToolResponse
-from whatbox_media_mcp.tools.common import clamp_limit, partial_call, safe_tool
+from whatbox_media_mcp.tools.common import (
+    clamp_limit,
+    compact_plex_item,
+    compact_tautulli_activity,
+    partial_call,
+    safe_tool,
+)
 
 
 async def plex_overview(
@@ -40,7 +46,7 @@ async def plex_overview(
                 if warning:
                     warnings.append(f"plex recently added {name}: {warning}")
                     continue
-                recently_added.extend(items or [])
+                recently_added.extend(compact_plex_item(item) for item in items or [])
             data["recently_added"] = recently_added[:bounded]
 
         if include_staleness:
@@ -55,7 +61,9 @@ async def plex_overview(
                     warnings.append(f"plex staleness {name}: {warning}")
                     continue
                 stale.extend(
-                    item for item in items or [] if not item.get("last_viewed_at") and not item.get("view_count")
+                    compact_plex_item(item)
+                    for item in items or []
+                    if not item.get("last_viewed_at") and not item.get("view_count")
                 )
             data["basic_staleness_candidates"] = stale[:bounded]
 
@@ -64,7 +72,7 @@ async def plex_overview(
             if warning:
                 warnings.append(f"tautulli activity: {warning}")
             else:
-                data["tautulli_activity"] = tautulli_activity
+                data["tautulli_activity"] = compact_tautulli_activity(tautulli_activity or {})
 
         return ToolResponse.success(data, warnings)
 

@@ -4,7 +4,7 @@ from typing import Any
 
 from whatbox_media_mcp.runtime import Services
 from whatbox_media_mcp.schemas import ToolResponse
-from whatbox_media_mcp.tools.common import clamp_limit, confidence, safe_tool
+from whatbox_media_mcp.tools.common import clamp_limit, confidence, is_exact_title_year_match, safe_tool
 
 
 async def media_search(
@@ -42,6 +42,7 @@ async def media_search(
         if has_crew_filter:
             wanted.add("plex")
 
+        include_directors = bool(director or actor)
         candidates: list[dict[str, Any]] = []
         if include_existing and "movie" in wanted and not skip_arr:
             candidates.extend(await _radarr_existing(services, query, genre=genre, language=language, year=year))
@@ -54,9 +55,16 @@ async def media_search(
         if include_existing and "plex" in wanted:
             candidates.extend(
                 await _plex_existing(
-                    services, query, bounded,
-                    director=director, actor=actor, genre=genre,
-                    language=language, year=year, country=country,
+                    services,
+                    query,
+                    bounded,
+                    director=director,
+                    actor=actor,
+                    genre=genre,
+                    language=language,
+                    year=year,
+                    country=country,
+                    include_directors=include_directors,
                 )
             )
         candidates.sort(key=lambda item: item["confidence"], reverse=True)
@@ -85,35 +93,45 @@ async def _radarr_existing(
         score = confidence(query, title, item.get("year")) if query else 1.0
         if query and score < 0.45:
             continue
-        results.append({
-            "kind": "movie",
-            "source": "radarr",
-            "title": item.get("title"),
-            "year": item.get("year"),
-            "exists": True,
-            "confidence": score,
-            "radarr_id": item.get("id"),
-            "tmdb_id": item.get("tmdbId"),
-            "imdb_id": item.get("imdbId"),
-        })
+        safe, match_type = is_exact_title_year_match(query, year, item.get("title"), item.get("year"))
+        results.append(
+            {
+                "kind": "movie",
+                "source": "radarr",
+                "title": item.get("title"),
+                "year": item.get("year"),
+                "exists": True,
+                "confidence": score,
+                "match_type": match_type,
+                "safe_for_action": safe,
+                "radarr_id": item.get("id"),
+                "tmdb_id": item.get("tmdbId"),
+                "imdb_id": item.get("imdbId"),
+            }
+        )
     return results
 
 
 async def _radarr_lookup(services: Services, query: str) -> list[dict[str, Any]]:
     movies = await services.radarr.get("/api/v3/movie/lookup", {"term": query})
-    return [
-        {
-            "kind": "movie",
-            "source": "radarr_lookup",
-            "title": item.get("title"),
-            "year": item.get("year"),
-            "exists": False,
-            "confidence": confidence(query, str(item.get("title", "")), item.get("year")),
-            "tmdb_id": item.get("tmdbId"),
-            "imdb_id": item.get("imdbId"),
-        }
-        for item in _as_list(movies)
-    ]
+    results = []
+    for item in _as_list(movies):
+        _, match_type = is_exact_title_year_match(query, None, item.get("title"), item.get("year"))
+        results.append(
+            {
+                "kind": "movie",
+                "source": "radarr_lookup",
+                "title": item.get("title"),
+                "year": item.get("year"),
+                "exists": False,
+                "confidence": confidence(query, str(item.get("title", "")), item.get("year")),
+                "match_type": match_type,
+                "safe_for_action": False,
+                "tmdb_id": item.get("tmdbId"),
+                "imdb_id": item.get("imdbId"),
+            }
+        )
+    return results
 
 
 async def _sonarr_existing(
@@ -133,35 +151,45 @@ async def _sonarr_existing(
         score = confidence(query, title, item.get("year")) if query else 1.0
         if query and score < 0.45:
             continue
-        results.append({
-            "kind": "series",
-            "source": "sonarr",
-            "title": item.get("title"),
-            "year": item.get("year"),
-            "exists": True,
-            "confidence": score,
-            "sonarr_id": item.get("id"),
-            "tvdb_id": item.get("tvdbId"),
-            "imdb_id": item.get("imdbId"),
-        })
+        safe, match_type = is_exact_title_year_match(query, year, item.get("title"), item.get("year"))
+        results.append(
+            {
+                "kind": "series",
+                "source": "sonarr",
+                "title": item.get("title"),
+                "year": item.get("year"),
+                "exists": True,
+                "confidence": score,
+                "match_type": match_type,
+                "safe_for_action": safe,
+                "sonarr_id": item.get("id"),
+                "tvdb_id": item.get("tvdbId"),
+                "imdb_id": item.get("imdbId"),
+            }
+        )
     return results
 
 
 async def _sonarr_lookup(services: Services, query: str) -> list[dict[str, Any]]:
     series = await services.sonarr.get("/api/v3/series/lookup", {"term": query})
-    return [
-        {
-            "kind": "series",
-            "source": "sonarr_lookup",
-            "title": item.get("title"),
-            "year": item.get("year"),
-            "exists": False,
-            "confidence": confidence(query, str(item.get("title", "")), item.get("year")),
-            "tvdb_id": item.get("tvdbId"),
-            "imdb_id": item.get("imdbId"),
-        }
-        for item in _as_list(series)
-    ]
+    results = []
+    for item in _as_list(series):
+        _, match_type = is_exact_title_year_match(query, None, item.get("title"), item.get("year"))
+        results.append(
+            {
+                "kind": "series",
+                "source": "sonarr_lookup",
+                "title": item.get("title"),
+                "year": item.get("year"),
+                "exists": False,
+                "confidence": confidence(query, str(item.get("title", "")), item.get("year")),
+                "match_type": match_type,
+                "safe_for_action": False,
+                "tvdb_id": item.get("tvdbId"),
+                "imdb_id": item.get("imdbId"),
+            }
+        )
+    return results
 
 
 async def _plex_existing(
@@ -174,6 +202,7 @@ async def _plex_existing(
     language: str | None = None,
     year: int | None = None,
     country: str | None = None,
+    include_directors: bool = False,
 ) -> list[dict[str, Any]]:
     plex_filters: dict[str, Any] = {}
     if director:
@@ -193,16 +222,21 @@ async def _plex_existing(
     for section_name in [services.settings.plex_movie_section, services.settings.plex_tv_section]:
         for item in await services.plex.search(section_name, query, limit, plex_filters or None):
             score = confidence(query, str(item.get("title", "")), item.get("year")) if query else 1.0
-            candidates.append({
+            safe, match_type = is_exact_title_year_match(query, year, item.get("title"), item.get("year"))
+            candidate: dict[str, Any] = {
                 "kind": "plex_item",
                 "source": "plex",
                 "title": item.get("title"),
                 "year": item.get("year"),
                 "exists": True,
                 "confidence": score,
+                "match_type": match_type,
+                "safe_for_action": safe,
                 "plex_rating_key": item.get("rating_key"),
-                "directors": item.get("directors"),
-            })
+            }
+            if include_directors:
+                candidate["directors"] = item.get("directors")
+            candidates.append(candidate)
     return candidates
 
 
