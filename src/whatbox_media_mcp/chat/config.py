@@ -15,6 +15,7 @@ class ChatSettings(Settings):
     chat_plex_client_id: str = Field(min_length=1)
     anthropic_api_key: SecretStr = Field(min_length=1)
     system_prompt_path: Path | None = None
+    ai_model: str = "claude-haiku-4-5-20251001"
 
     @property
     def mcp_url(self) -> str:

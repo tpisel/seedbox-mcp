@@ -10,7 +10,6 @@ from whatbox_media_mcp.chat.config import ChatSettings
 
 logger = logging.getLogger("whatbox_chat.ai")
 
-_MODEL = "claude-haiku-4-5-20251001"
 
 DEFAULT_SYSTEM_PROMPT = """\
 You are a friendly media assistant for a personal Plex server. \
@@ -64,7 +63,7 @@ async def chat_turn(
 
     while True:
         response = await anthropic_client.messages.create(
-            model=_MODEL,
+            model=settings.ai_model,
             max_tokens=4096,
             system=system_prompt,
             tools=tools,  # type: ignore[arg-type]
