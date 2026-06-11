@@ -432,12 +432,14 @@ async def test_sonarr_delete_series_batch_passes_query_params(services: Services
 class _StalenessPlex:
     def __init__(self, items: list[dict]) -> None:
         self._items = items
+        self.offsets: list[int] = []
 
     async def get_sections(self) -> list[str]:
         return ["Movies", "TV Shows"]
 
-    async def get_basic_library_items(self, section_name: str, limit: int) -> list[dict]:
-        return [item for item in self._items if item.get("section") == section_name][:limit]
+    async def get_basic_library_items(self, section_name: str, limit: int, offset: int = 0) -> list[dict]:
+        self.offsets.append(offset)
+        return [item for item in self._items if item.get("section") == section_name][offset : offset + limit]
 
 
 @pytest.mark.asyncio
@@ -563,6 +565,32 @@ async def test_staleness_report_sort_size_desc_limit_after_sort(services: Servic
     titles = [i["title"] for i in result["data"]["added_long_ago_unwatched"]]
     # Limit applied after sort: top two by size, not alphabetically first two.
     assert titles == ["Movie 5", "Movie 4"]
+
+
+@pytest.mark.asyncio
+async def test_staleness_report_paginates_plex_library(services: Services) -> None:
+    services.radarr.routes[("GET", "/api/v3/movie")] = []
+    services.sonarr.routes[("GET", "/api/v3/series")] = []
+    plex_items = [
+        {
+            "type": "movie",
+            "title": f"Movie {i}",
+            "year": 2000,
+            "section": "Movies",
+            "rating_key": str(i),
+            "added_at": "2020-01-01T00:00:00+00:00",
+            "last_viewed_at": None,
+            "view_count": 0,
+            "size_on_disk_gb": 1.0,
+        }
+        for i in range(501)
+    ]
+    plex = _StalenessPlex(plex_items)
+    object.__setattr__(services, "plex", plex)
+    result = await staleness_report(services, media_type="movies", older_than_days=30, limit=500)
+    titles = {item["title"] for item in result["data"]["added_long_ago_unwatched"]}
+    assert len(titles) == 500
+    assert plex.offsets == [0, 500]
 
 
 @pytest.mark.asyncio

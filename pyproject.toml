@@ -1,9 +1,10 @@
 [project]
 name = "whatbox-media-mcp"
 version = "0.1.0"
-description = "Private MCP server for Whatbox media stack stewardship."
+description = "MCP server and Plex-authenticated chat UI for Plex, Radarr, and Sonarr."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
 dependencies = [
   "anthropic>=0.25",
   "fastmcp>=2",

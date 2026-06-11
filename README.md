@@ -67,6 +67,7 @@ All settings are read from `.env` or environment variables.
 | `RADARR_DEFAULT_MIN_AVAILABILITY` | `released` | `announced`, `in_cinemas`, or `released` |
 | `SONARR_DEFAULT_LANGUAGE_PROFILE_ID` | _(none)_ | Sonarr v3 language profile ID; omit for Sonarr v4+ |
 | `SONARR_DEFAULT_SERIES_TYPE` | `standard` | `standard`, `daily`, or `anime` |
+| `PLEX_VERIFY_TLS` | `true` | Verify Plex HTTPS certificates. Set `false` only for a trusted endpoint with a self-signed certificate |
 | `PLEX_MOVIE_SECTION` | `Movies` | Display name of the Plex movie library |
 | `PLEX_TV_SECTION` | `TV Shows` | Display name of the Plex TV library |
 | `TAUTULLI_ENABLED` | `false` | Set `true` to enable Tautulli watch-history enrichment |
