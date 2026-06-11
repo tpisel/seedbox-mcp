@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import httpx
 
-from whatbox_media_mcp.errors import UpstreamError
+from seedbox_mcp.errors import UpstreamError
 
 
 class ArrClient:

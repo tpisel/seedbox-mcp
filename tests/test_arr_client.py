@@ -4,8 +4,8 @@ import httpx
 import pytest
 import respx
 
-from whatbox_media_mcp.clients.arr import ArrClient
-from whatbox_media_mcp.errors import UpstreamError
+from seedbox_mcp.clients.arr import ArrClient
+from seedbox_mcp.errors import UpstreamError
 
 
 @respx.mock

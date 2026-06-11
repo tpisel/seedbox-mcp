@@ -12,17 +12,17 @@ from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from whatbox_media_mcp.chat.ai import chat_turn, load_system_prompt
-from whatbox_media_mcp.chat.auth import (
+from seedbox_mcp.chat.ai import chat_turn, load_system_prompt
+from seedbox_mcp.chat.auth import (
     PlexAuthMiddleware,
     check_handler,
     login_handler,
     logout_handler,
 )
-from whatbox_media_mcp.chat.config import ChatSettings, load_chat_settings
-from whatbox_media_mcp.chat.mcp_client import make_mcp_client
+from seedbox_mcp.chat.config import ChatSettings, load_chat_settings
+from seedbox_mcp.chat.mcp_client import make_mcp_client
 
-logger = logging.getLogger("whatbox_chat.server")
+logger = logging.getLogger("seedbox_mcp.chat.server")
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -79,7 +79,7 @@ def create_chat_app(settings: ChatSettings) -> Starlette:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = load_chat_settings()
-    logger.info("Starting Whatbox Chat on %s:%s", settings.chat_host, settings.chat_port)
+    logger.info("Starting Seedbox Chat on %s:%s", settings.chat_host, settings.chat_port)
     uvicorn.run(create_chat_app(settings), host=settings.chat_host, port=settings.chat_port)
 
 

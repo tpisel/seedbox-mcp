@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from whatbox_media_mcp.chat.ai import (
+from seedbox_mcp.chat.ai import (
     DEFAULT_SYSTEM_PROMPT,
     chat_turn,
     extract_tool_text,
     load_system_prompt,
     mcp_tool_to_anthropic,
 )
-from whatbox_media_mcp.chat.config import ChatSettings
+from seedbox_mcp.chat.config import ChatSettings
 
 # ---------------------------------------------------------------------------
 # System prompt

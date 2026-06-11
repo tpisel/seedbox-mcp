@@ -5,8 +5,8 @@ from typing import Any, TypeVar
 
 from rapidfuzz import fuzz
 
-from whatbox_media_mcp.errors import MediaMcpError
-from whatbox_media_mcp.schemas import ToolResponse
+from seedbox_mcp.errors import MediaMcpError
+from seedbox_mcp.schemas import ToolResponse
 
 T = TypeVar("T")
 

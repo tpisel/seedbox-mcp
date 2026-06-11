@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from whatbox_media_mcp.config import Settings
+from seedbox_mcp.config import Settings
 
 
 def test_config_redacts_secrets(settings: Settings) -> None:

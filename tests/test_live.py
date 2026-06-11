@@ -4,11 +4,11 @@ import os
 
 import pytest
 
-from whatbox_media_mcp.config import load_settings
-from whatbox_media_mcp.runtime import Services, build_services
-from whatbox_media_mcp.tools.radarr import radarr_overview
-from whatbox_media_mcp.tools.sonarr import sonarr_overview
-from whatbox_media_mcp.tools.status import media_status
+from seedbox_mcp.config import load_settings
+from seedbox_mcp.runtime import Services, build_services
+from seedbox_mcp.tools.radarr import radarr_overview
+from seedbox_mcp.tools.sonarr import sonarr_overview
+from seedbox_mcp.tools.status import media_status
 
 pytestmark = [
     pytest.mark.live,

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import SecretStr
 
-from whatbox_media_mcp.chat.config import ChatSettings
+from seedbox_mcp.chat.config import ChatSettings
 
 BASE_REQUIRED = dict(
     mcp_bearer_token=SecretStr("dev"),

@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
-from whatbox_media_mcp.config import Settings
-from whatbox_media_mcp.runtime import Services
+from seedbox_mcp.config import Settings
+from seedbox_mcp.runtime import Services
 
 
 class FakeArrClient:

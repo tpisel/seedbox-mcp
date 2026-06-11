@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from whatbox_media_mcp.server import create_mcp
+from seedbox_mcp.server import create_mcp
 
 
 @pytest.mark.asyncio

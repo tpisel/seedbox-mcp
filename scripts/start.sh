@@ -18,8 +18,8 @@ screen -S "$CHAT_SESSION" -X quit 2>/dev/null && echo "Stopped $CHAT_SESSION" ||
 # Brief pause to let ports release
 sleep 1
 
-screen -dmS "$MCP_SESSION"  bash -c "cd '$REPO' && uv run python -m whatbox_media_mcp.server      2>&1 | tee -a '$LOG_MCP'"
+screen -dmS "$MCP_SESSION"  bash -c "cd '$REPO' && uv run python -m seedbox_mcp.server      2>&1 | tee -a '$LOG_MCP'"
 echo "Started $MCP_SESSION (logs: $LOG_MCP)"
 
-screen -dmS "$CHAT_SESSION" bash -c "cd '$REPO' && uv run python -m whatbox_media_mcp.chat.server 2>&1 | tee -a '$LOG_CHAT'"
+screen -dmS "$CHAT_SESSION" bash -c "cd '$REPO' && uv run python -m seedbox_mcp.chat.server 2>&1 | tee -a '$LOG_CHAT'"
 echo "Started $CHAT_SESSION (logs: $LOG_CHAT)"

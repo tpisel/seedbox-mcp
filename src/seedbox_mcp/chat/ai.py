@@ -6,9 +6,9 @@ from typing import Any
 from anthropic import AsyncAnthropic
 from fastmcp import Client
 
-from whatbox_media_mcp.chat.config import ChatSettings
+from seedbox_mcp.chat.config import ChatSettings
 
-logger = logging.getLogger("whatbox_chat.ai")
+logger = logging.getLogger("seedbox_mcp.chat.ai")
 
 
 DEFAULT_SYSTEM_PROMPT = """\

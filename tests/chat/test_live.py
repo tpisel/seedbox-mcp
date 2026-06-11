@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from whatbox_media_mcp.chat.ai import chat_turn
-from whatbox_media_mcp.chat.config import ChatSettings
+from seedbox_mcp.chat.ai import chat_turn
+from seedbox_mcp.chat.config import ChatSettings
 
 pytestmark = [
     pytest.mark.live,
@@ -25,7 +25,7 @@ def _real_anthropic(settings: ChatSettings) -> Any:
 
 
 def _real_mcp(settings: ChatSettings) -> Any:
-    from whatbox_media_mcp.chat.mcp_client import make_mcp_client
+    from seedbox_mcp.chat.mcp_client import make_mcp_client
 
     return make_mcp_client(settings)
 

@@ -4,7 +4,7 @@ from typing import Any
 
 from fastmcp import Client
 
-from whatbox_media_mcp.chat.config import ChatSettings
+from seedbox_mcp.chat.config import ChatSettings
 
 
 def make_mcp_client(settings: ChatSettings) -> Client[Any]:

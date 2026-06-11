@@ -10,9 +10,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
-from whatbox_media_mcp.chat.config import ChatSettings
+from seedbox_mcp.chat.config import ChatSettings
 
-logger = logging.getLogger("whatbox_chat.auth")
+logger = logging.getLogger("seedbox_mcp.chat.auth")
 
 _PLEX_API = "https://plex.tv/api/v2"
 _SESSION_COOKIE = "plex_session"
@@ -48,7 +48,7 @@ def read_session(cookie: str, secret: str) -> str | None:
 def _plex_headers(client_id: str) -> dict[str, str]:
     return {
         "X-Plex-Client-Identifier": client_id,
-        "X-Plex-Product": "Whatbox Chat",
+        "X-Plex-Product": "Seedbox Chat",
         "Accept": "application/json",
     }
 
@@ -90,7 +90,7 @@ _ERROR_MESSAGES = {
 _ERROR_PAGE = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Whatbox Media – Sign in</title>
+<title>Seedbox Chat – Sign in</title>
 <style>
 body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 background:#f5f5f5;display:flex;align-items:center;justify-content:center;height:100dvh;margin:0}}
@@ -111,7 +111,7 @@ a:hover{{background:#333}}
 _PIN_PAGE = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Whatbox Media – Sign in</title>
+<title>Seedbox Chat – Sign in</title>
 <style>
 body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 background:#f5f5f5;display:flex;align-items:center;justify-content:center;height:100dvh;margin:0}}

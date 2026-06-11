@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from whatbox_media_mcp.runtime import Services
-from whatbox_media_mcp.schemas import ToolResponse
-from whatbox_media_mcp.tools.common import (
+from seedbox_mcp.runtime import Services
+from seedbox_mcp.schemas import ToolResponse
+from seedbox_mcp.tools.common import (
     clamp_limit,
     compact_plex_item,
     compact_tautulli_activity,

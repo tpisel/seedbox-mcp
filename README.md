@@ -1,9 +1,11 @@
-# Whatbox Media Steward
+# Seedbox MCP
 
-Two co-hosted services for a Whatbox media stack:
+Two co-hosted services for a Plex + Radarr + Sonarr stack:
 
-- **MCP server** (`whatbox-media-mcp`) — exposes compact tools for Plex, Radarr, and Sonarr so your agent of choice can inspect media state and do basic actions.
-- **Chat interface** (`whatbox-chat`) — a Plex-authenticated single-page chat UI powered by Claude Haiku, pre-wired to the MCP server. Designed for family members who have Plex access but not Claude.
+- **MCP server** (`seedbox-mcp`) — exposes compact tools for Plex, Radarr, and Sonarr so your agent of choice can inspect media state and do basic actions.
+- **Chat interface** (`seedbox-chat`) — a Plex-authenticated single-page chat UI powered by Claude Haiku, pre-wired to the MCP server. Designed for family members who have Plex access but not Claude.
+
+Runs anywhere Python can reach your Plex and *arr services — seedbox slots (Whatbox, Ultraseedbox, etc.), homelabs, NAS, VPS. The Whatbox-specific examples below cover one well-tested deployment path; adapt them to your environment (systemd, Docker, reverse proxy of choice).
 
 ---
 
@@ -49,13 +51,13 @@ All settings are read from `.env` or environment variables.
 | `MCP_PUBLIC_BASE_URL` | Public HTTPS base URL (e.g. `https://mcp.example.box.ca`) — required for OAuth discovery metadata |
 | `RADARR_URL` | Radarr base URL |
 | `RADARR_API_KEY` | Radarr → Settings → General → Security |
-| `RADARR_DEFAULT_ROOT_FOLDER` | Absolute path to movies root folder on the slot |
+| `RADARR_DEFAULT_ROOT_FOLDER` | Absolute path to movies root folder, as Radarr sees it |
 | `RADARR_DEFAULT_QUALITY_PROFILE_ID` | Integer — see [Finding quality profile IDs](#finding-quality-profile-ids) |
 | `SONARR_URL` | Sonarr base URL |
 | `SONARR_API_KEY` | Sonarr → Settings → General → Security |
-| `SONARR_DEFAULT_ROOT_FOLDER` | Absolute path to TV root folder on the slot |
+| `SONARR_DEFAULT_ROOT_FOLDER` | Absolute path to TV root folder, as Sonarr sees it |
 | `SONARR_DEFAULT_QUALITY_PROFILE_ID` | Integer — see [Finding quality profile IDs](#finding-quality-profile-ids) |
-| `PLEX_URL` | Plex base URL — use the public HTTPS address on Whatbox (not `127.0.0.1:32400`) |
+| `PLEX_URL` | Plex base URL — must be reachable from where this server runs. On a seedbox slot use the public HTTPS URL; on the same host as Plex `http://127.0.0.1:32400` is fine |
 | `PLEX_TOKEN` | Plex auth token — see [Finding your Plex token](#finding-your-plex-token) |
 
 ### Optional
@@ -93,7 +95,7 @@ The chat server reads the same `.env` file as the MCP server and adds:
 
 | Variable | Notes |
 |---|---|
-| `CHAT_PUBLIC_BASE_URL` | Public HTTPS base URL for the chat app (e.g. `https://example.whatbox.ca/chat`) — used as the Plex OAuth callback origin |
+| `CHAT_PUBLIC_BASE_URL` | Public HTTPS base URL for the chat app (e.g. `https://chat.example.com`) — used as the Plex OAuth callback origin |
 | `CHAT_SESSION_SECRET` | Long random string used to sign session cookies |
 | `CHAT_PLEX_CLIENT_ID` | Stable UUID identifying this app to Plex — generate once with `python3 -c "import uuid; print(uuid.uuid4())"` |
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude Haiku |
@@ -115,9 +117,9 @@ The chat server reads the same `.env` file as the MCP server and adds:
 
 Only users who already have Plex friend access can log in. There is no separate user management.
 
-### Whatbox deployment
+### Deploying the chat server (Whatbox example)
 
-Run alongside the MCP server. Each needs its own `screen` session:
+Run alongside the MCP server. On a seedbox slot without systemd, each needs its own `screen` session:
 
 ```bash
 screen -dmS media-mcp  bash -c 'cd ~/seedboxmcp && just run      2>&1 | tee -a ~/seedboxmcp/mcp.log'
@@ -131,7 +133,7 @@ Add both to crontab for reboot persistence:
 @reboot sleep 30 && screen -dmS media-chat bash -c 'cd ~/seedboxmcp && just run-chat  2>&1 | tee -a ~/seedboxmcp/chat.log'
 ```
 
-Configure a second Whatbox managed HTTPS link forwarding to `http://127.0.0.1:17433` and set `CHAT_PUBLIC_BASE_URL` to the resulting URL.
+Front the chat port (`17433`) with HTTPS the same way you do for the MCP server — on Whatbox that's a second managed HTTPS link; elsewhere, your reverse proxy of choice. Set `CHAT_PUBLIC_BASE_URL` to the resulting public URL.
 
 ### Finding your Plex token
 
@@ -149,7 +151,9 @@ curl -s "https://<radarr-host>/api/v3/qualityprofile?apikey=<key>" | python3 -m 
 curl -s "https://<sonarr-host>/api/v3/qualityprofile?apikey=<key>" | python3 -m json.tool
 ```
 
-## Whatbox Deployment
+## Deployment (Whatbox example)
+
+The pattern below is what the author runs on Whatbox. On a homelab with systemd, swap `screen` + `@reboot` for a systemd unit; on Docker, package the same `python -m seedbox_mcp.server` invocation. Whatever the runtime, the server expects to be fronted by HTTPS at `MCP_PUBLIC_BASE_URL` — on Whatbox that's a "managed HTTPS link"; elsewhere use Caddy, nginx, Tailscale Serve, or similar.
 
 ### Clone and install
 
@@ -169,7 +173,7 @@ screen -dmS media-mcp bash -c 'cd ~/seedboxmcp && scripts/run.sh 2>&1 | tee -a ~
 
 Reattach: `screen -r media-mcp`. Detach: `Ctrl-A D`.
 
-### Auto-restart on slot reboot
+### Auto-restart on reboot
 
 ```bash
 crontab -e
@@ -181,7 +185,7 @@ Add:
 @reboot sleep 30 && screen -dmS media-mcp bash -c 'cd ~/seedboxmcp && scripts/run.sh 2>&1 | tee -a ~/seedboxmcp/mcp.log'
 ```
 
-The `sleep 30` gives the slot time to bring up networking before the server tries to connect.
+The `sleep 30` gives the host time to bring up networking before the server tries to connect.
 
 ### Restart the server
 
@@ -190,9 +194,9 @@ screen -S media-mcp -X quit
 screen -dmS media-mcp bash -c 'cd ~/seedboxmcp && scripts/run.sh 2>&1 | tee -a ~/seedboxmcp/mcp.log'
 ```
 
-### Whatbox managed HTTPS link
+### Public HTTPS front-end
 
-Configure a Whatbox managed HTTPS link forwarding to `http://127.0.0.1:17432` and set `MCP_PUBLIC_BASE_URL` to the resulting HTTPS URL.
+Front `http://127.0.0.1:17432` with HTTPS — a Whatbox managed link, a reverse proxy (Caddy / nginx), Tailscale Serve, or equivalent — and set `MCP_PUBLIC_BASE_URL` to the resulting HTTPS URL. OAuth discovery metadata is derived from this value, so it must match what your clients actually use.
 
 See the [Chat Interface](#chat-interface) section for deploying the companion chat server.
 
@@ -297,7 +301,7 @@ Are there any stuck or import-blocked items in the Radarr or Sonarr queue? If so
 - **OAuth consent form rejects your token:** paste the exact value of `MCP_BEARER_TOKEN` from your `.env` with no extra whitespace.
 - **Claude.ai "Authorization failed" after consent:** check that `MCP_PUBLIC_BASE_URL` is set and matches your public hostname; verify with `curl https://<host>/.well-known/oauth-authorization-server` that `token_endpoint` is a full HTTPS URL.
 - **Radarr or Sonarr auth errors:** verify API keys in each app.
-- **Plex errors:** use the public HTTPS Whatbox URL for `PLEX_URL`, not `127.0.0.1:32400`. Verify `PLEX_TOKEN` and section names (`PLEX_MOVIE_SECTION`, `PLEX_TV_SECTION`).
+- **Plex errors:** `PLEX_URL` must be reachable from where the server runs. On a seedbox slot that usually means the public HTTPS URL, not `127.0.0.1:32400`. Verify `PLEX_TOKEN` and section names (`PLEX_MOVIE_SECTION`, `PLEX_TV_SECTION`).
 - **Partial status warnings:** one upstream may be down while the MCP server itself is healthy.
 
 Automated tests (`just test`) use mocked upstreams and do not require live services. Use `just test-live` to test access to external services.

@@ -1,5 +1,5 @@
 [project]
-name = "whatbox-media-mcp"
+name = "seedbox-mcp"
 version = "0.1.0"
 description = "MCP server and Plex-authenticated chat UI for Plex, Radarr, and Sonarr."
 readme = "README.md"
@@ -20,8 +20,8 @@ dependencies = [
 ]
 
 [project.scripts]
-whatbox-media-mcp = "whatbox_media_mcp.server:main"
-whatbox-chat = "whatbox_media_mcp.chat.server:main"
+seedbox-mcp = "seedbox_mcp.server:main"
+seedbox-chat = "seedbox_mcp.chat.server:main"
 
 [build-system]
 requires = ["hatchling"]

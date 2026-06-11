@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import SecretStr
 
-from whatbox_media_mcp.chat.config import ChatSettings
+from seedbox_mcp.chat.config import ChatSettings
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def chat_settings() -> ChatSettings:
         sonarr_default_quality_profile_id=1,
         plex_url="http://plex.local",
         plex_token=SecretStr("plex-admin-token"),
-        chat_public_base_url="https://example.whatbox.ca/chat",
+        chat_public_base_url="https://chat.example.com",
         chat_session_secret=SecretStr("test-session-secret"),
         chat_plex_client_id="test-plex-client-id",
         anthropic_api_key=SecretStr("sk-ant-test"),

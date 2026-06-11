@@ -1,4 +1,4 @@
-"""Whatbox Media Steward MCP."""
+"""Seedbox MCP."""
 
 __all__ = ["__version__"]
 

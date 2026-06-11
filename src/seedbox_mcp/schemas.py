@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from whatbox_media_mcp.errors import MediaMcpError
+from seedbox_mcp.errors import MediaMcpError
 
 
 class ApiError(BaseModel):

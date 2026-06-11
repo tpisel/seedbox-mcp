@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import Field, SecretStr
 
-from whatbox_media_mcp.config import Settings
+from seedbox_mcp.config import Settings
 
 
 class ChatSettings(Settings):

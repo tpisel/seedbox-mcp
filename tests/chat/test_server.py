@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from whatbox_media_mcp.chat.auth import make_session
-from whatbox_media_mcp.chat.config import ChatSettings
-from whatbox_media_mcp.chat.server import create_chat_app
+from seedbox_mcp.chat.auth import make_session
+from seedbox_mcp.chat.config import ChatSettings
+from seedbox_mcp.chat.server import create_chat_app
 
 
 def _session_cookie(chat_settings: ChatSettings) -> str:
@@ -54,7 +54,7 @@ async def test_chat_endpoint_unauthenticated_redirects(chat_settings: ChatSettin
 
 @pytest.mark.asyncio
 async def test_chat_endpoint_returns_reply(chat_settings: ChatSettings) -> None:
-    with patch("whatbox_media_mcp.chat.server.chat_turn", new=AsyncMock(return_value=("Great choice!", []))):
+    with patch("seedbox_mcp.chat.server.chat_turn", new=AsyncMock(return_value=("Great choice!", []))):
         transport = _make_transport(chat_settings)
         cookie = _session_cookie(chat_settings)
         async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:

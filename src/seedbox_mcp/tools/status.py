@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from whatbox_media_mcp.runtime import Services
-from whatbox_media_mcp.schemas import ToolResponse
-from whatbox_media_mcp.tools.common import partial_call, safe_tool
+from seedbox_mcp.runtime import Services
+from seedbox_mcp.schemas import ToolResponse
+from seedbox_mcp.tools.common import partial_call, safe_tool
 
 
 async def media_status(services: Services) -> dict[str, Any]:

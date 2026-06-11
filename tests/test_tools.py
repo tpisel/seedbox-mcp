@@ -2,34 +2,34 @@ from __future__ import annotations
 
 import pytest
 
-from tests.conftest import FakeArrClient
-from whatbox_media_mcp.runtime import Services
-from whatbox_media_mcp.tools.common import compact_tautulli_activity
-from whatbox_media_mcp.tools.plex import plex_overview
-from whatbox_media_mcp.tools.radarr import (
+from seedbox_mcp.runtime import Services
+from seedbox_mcp.tools.common import compact_tautulli_activity
+from seedbox_mcp.tools.plex import plex_overview
+from seedbox_mcp.tools.radarr import (
     radarr_add_movie,
     radarr_delete_movie,
     radarr_delete_movies_batch,
     radarr_queue_action,
     radarr_research_movie,
 )
-from whatbox_media_mcp.tools.search import media_search
-from whatbox_media_mcp.tools.sonarr import (
+from seedbox_mcp.tools.search import media_search
+from seedbox_mcp.tools.sonarr import (
     sonarr_add_series,
     sonarr_delete_series,
     sonarr_delete_series_batch,
     sonarr_queue_action,
     sonarr_research_series,
 )
-from whatbox_media_mcp.tools.staleness import staleness_report
-from whatbox_media_mcp.tools.status import media_status
+from seedbox_mcp.tools.staleness import staleness_report
+from seedbox_mcp.tools.status import media_status
+from tests.conftest import FakeArrClient
 
 
 @pytest.mark.asyncio
 async def test_media_status_returns_partial_success(settings) -> None:  # type: ignore[no-untyped-def]
     class FailingPlex:
         async def get_sections(self):  # type: ignore[no-untyped-def]
-            from whatbox_media_mcp.errors import UpstreamError
+            from seedbox_mcp.errors import UpstreamError
 
             raise UpstreamError("upstream_unreachable", "Plex down.")
 

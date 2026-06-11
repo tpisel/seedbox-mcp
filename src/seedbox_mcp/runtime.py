@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from whatbox_media_mcp.clients.arr import ArrClient
-from whatbox_media_mcp.clients.plex import PlexClient
-from whatbox_media_mcp.clients.tautulli import TautulliClient
-from whatbox_media_mcp.config import Settings
+from seedbox_mcp.clients.arr import ArrClient
+from seedbox_mcp.clients.plex import PlexClient
+from seedbox_mcp.clients.tautulli import TautulliClient
+from seedbox_mcp.config import Settings
 
 
 @dataclass(frozen=True)

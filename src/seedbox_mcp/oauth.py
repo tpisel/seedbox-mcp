@@ -18,7 +18,7 @@ _REFRESH_TTL = 2_592_000  # 30 days
 
 _CONSENT_HTML = """<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Authorize – Whatbox Media Steward</title>
+<head><meta charset="utf-8"><title>Authorize – Seedbox MCP</title>
 <style>
 body{{font-family:sans-serif;max-width:420px;margin:4rem auto;padding:0 1rem}}
 h2{{margin-bottom:.25rem}}p{{color:#555;margin-top:0}}
@@ -29,7 +29,7 @@ button{{background:#1a1a1a;color:#fff;border:none;padding:.5rem 1.2rem;border-ra
 button:hover{{background:#333}}.err{{color:#c00;margin-bottom:.75rem;font-size:.9rem}}
 </style></head>
 <body>
-<h2>Whatbox Media Steward</h2>
+<h2>Seedbox MCP</h2>
 <p>Authorizing <strong>{client_id}</strong></p>
 {error_html}
 <form method="post">

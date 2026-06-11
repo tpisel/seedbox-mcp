@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from whatbox_media_mcp.runtime import Services
-from whatbox_media_mcp.schemas import ToolResponse
-from whatbox_media_mcp.tools.common import clamp_limit, safe_tool
+from seedbox_mcp.runtime import Services
+from seedbox_mcp.schemas import ToolResponse
+from seedbox_mcp.tools.common import clamp_limit, safe_tool
 
 _GROUPING = {"daily": 0, "monthly": 1, "total": 2}
 

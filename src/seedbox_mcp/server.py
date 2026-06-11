@@ -13,11 +13,11 @@ from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from whatbox_media_mcp.config import Settings, load_settings
-from whatbox_media_mcp.oauth import OAuthStore
-from whatbox_media_mcp.runtime import Services, build_services
-from whatbox_media_mcp.tools.plex import plex_library_size, plex_overview
-from whatbox_media_mcp.tools.radarr import (
+from seedbox_mcp.config import Settings, load_settings
+from seedbox_mcp.oauth import OAuthStore
+from seedbox_mcp.runtime import Services, build_services
+from seedbox_mcp.tools.plex import plex_library_size, plex_overview
+from seedbox_mcp.tools.radarr import (
     radarr_add_movie,
     radarr_delete_movie,
     radarr_delete_movies_batch,
@@ -25,8 +25,8 @@ from whatbox_media_mcp.tools.radarr import (
     radarr_queue_action,
     radarr_research_movie,
 )
-from whatbox_media_mcp.tools.search import media_search
-from whatbox_media_mcp.tools.sonarr import (
+from seedbox_mcp.tools.search import media_search
+from seedbox_mcp.tools.sonarr import (
     sonarr_add_series,
     sonarr_delete_series,
     sonarr_delete_series_batch,
@@ -34,11 +34,11 @@ from whatbox_media_mcp.tools.sonarr import (
     sonarr_queue_action,
     sonarr_research_series,
 )
-from whatbox_media_mcp.tools.staleness import staleness_report
-from whatbox_media_mcp.tools.status import media_status
-from whatbox_media_mcp.tools.tautulli import tautulli_history, tautulli_user_stats, tautulli_users
+from seedbox_mcp.tools.staleness import staleness_report
+from seedbox_mcp.tools.status import media_status
+from seedbox_mcp.tools.tautulli import tautulli_history, tautulli_user_stats, tautulli_users
 
-logger = logging.getLogger("whatbox_media_mcp")
+logger = logging.getLogger("seedbox_mcp")
 
 READ_ONLY = {
     "readOnlyHint": True,
@@ -104,7 +104,7 @@ class BearerAuthApp:
 
 
 def create_mcp(services: Services) -> FastMCP:
-    mcp = FastMCP("Whatbox Media Steward")
+    mcp = FastMCP("Seedbox MCP")
 
     async def media_status_tool() -> dict[str, Any]:
         return await media_status(services)
@@ -559,7 +559,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = load_settings()
     logger.info(
-        "Starting Whatbox Media Steward MCP with config: %s",
+        "Starting Seedbox MCP with config: %s",
         json.dumps(settings.redacted_summary(), sort_keys=True),
     )
     uvicorn.run(create_app(settings), host=settings.mcp_host, port=settings.mcp_port)

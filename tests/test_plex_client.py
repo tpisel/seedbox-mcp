@@ -1,4 +1,4 @@
-from whatbox_media_mcp.clients.plex import PlexClient
+from seedbox_mcp.clients.plex import PlexClient
 
 
 def test_plex_client_verifies_tls_by_default() -> None:

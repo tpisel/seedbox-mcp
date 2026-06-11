@@ -7,7 +7,7 @@ import requests
 import urllib3
 from plexapi.server import PlexServer
 
-from whatbox_media_mcp.errors import UpstreamError
+from seedbox_mcp.errors import UpstreamError
 
 
 def iso_datetime(value: Any) -> str | None:

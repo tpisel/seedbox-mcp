@@ -8,8 +8,8 @@ import time
 import pytest
 from starlette.testclient import TestClient
 
-from whatbox_media_mcp.oauth import OAuthStore, _verify_pkce
-from whatbox_media_mcp.server import BearerAuthApp, create_app
+from seedbox_mcp.oauth import OAuthStore, _verify_pkce
+from seedbox_mcp.server import BearerAuthApp, create_app
 
 # ---------------------------------------------------------------------------
 # Helpers
