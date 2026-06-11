@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Media server chatbot</title>
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -197,7 +198,9 @@
 </div>
 
 <script>
-  marked.use({ breaks: true, gfm: true });
+  if (window.marked) {
+    marked.use({ breaks: true, gfm: true });
+  }
 
   const messagesEl = document.getElementById('messages');
   const inputEl    = document.getElementById('input');
@@ -205,6 +208,19 @@
   const logoutBtn  = document.getElementById('logout-btn');
 
   let history = JSON.parse(sessionStorage.getItem('chat_history') || '[]');
+
+  function escapeHtml(content) {
+    const div = document.createElement('div');
+    div.textContent = content;
+    return div.innerHTML;
+  }
+
+  function renderMarkdown(content) {
+    if (!window.marked || !window.DOMPurify) {
+      return escapeHtml(content);
+    }
+    return DOMPurify.sanitize(marked.parse(content));
+  }
 
   // Restore prior session bubbles
   history.forEach(msg => {
@@ -225,7 +241,7 @@
     const div = document.createElement('div');
     div.className = `bubble ${role}`;
     if (role === 'assistant') {
-      div.innerHTML = marked.parse(content);
+      div.innerHTML = renderMarkdown(content);
     } else {
       div.textContent = content;
     }
@@ -274,7 +290,7 @@
       const data = await resp.json();
       history = data.history;
       sessionStorage.setItem('chat_history', JSON.stringify(history));
-      ellipsis.innerHTML = marked.parse(data.reply);
+      ellipsis.innerHTML = renderMarkdown(data.reply);
     } catch {
       ellipsis.textContent = 'Could not reach the server. Please try again.';
     } finally {

@@ -28,6 +28,6 @@ def build_services(settings: Settings) -> Services:
         settings=settings,
         radarr=ArrClient(settings.radarr_base_url, settings.radarr_api_key.get_secret_value()),
         sonarr=ArrClient(settings.sonarr_base_url, settings.sonarr_api_key.get_secret_value()),
-        plex=PlexClient(settings.plex_base_url, settings.plex_token.get_secret_value()),
+        plex=PlexClient(settings.plex_base_url, settings.plex_token.get_secret_value(), settings.plex_verify_tls),
         tautulli=tautulli,
     )

@@ -30,3 +30,7 @@ def test_config_requires_core_urls_and_credentials(monkeypatch: pytest.MonkeyPat
         monkeypatch.delenv(var, raising=False)
     with pytest.raises(ValidationError):
         Settings(_env_file=None, mcp_bearer_token=SecretStr("dev"))  # type: ignore[call-arg]
+
+
+def test_config_verifies_plex_tls_by_default(settings: Settings) -> None:
+    assert settings.plex_verify_tls is True

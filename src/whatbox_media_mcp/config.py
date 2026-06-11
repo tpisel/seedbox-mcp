@@ -43,6 +43,7 @@ class Settings(BaseSettings):
 
     plex_url: HttpUrl
     plex_token: SecretStr = Field(min_length=1)
+    plex_verify_tls: bool = True
     plex_movie_section: str = "Movies"
     plex_tv_section: str = "TV Shows"
 

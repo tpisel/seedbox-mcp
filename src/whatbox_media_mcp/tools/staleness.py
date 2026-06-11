@@ -15,6 +15,7 @@ from whatbox_media_mcp.tools.common import (
 )
 
 VALID_SORTS = {"staleness_desc", "size_desc", "title_asc"}
+PLEX_PAGE_SIZE = 500
 
 
 async def staleness_report(
@@ -37,11 +38,9 @@ async def staleness_report(
         bounded = clamp_limit(limit)
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
         sections = _sections(services, media_type)
-        # Fetch a large ceiling so title-matching against Radarr/Sonarr is accurate;
-        # bounded is only applied when slicing output below.
         plex_items = []
         for section in sections:
-            plex_items.extend(await services.plex.get_basic_library_items(section, 2000))
+            plex_items.extend(await _get_all_plex_items(services, section))
 
         radarr_movies = _as_list(await services.radarr.get("/api/v3/movie"))
         sonarr_series = _as_list(await services.sonarr.get("/api/v3/series"))
@@ -111,6 +110,17 @@ async def staleness_report(
         return ToolResponse.success(data)
 
     return await safe_tool(run)
+
+
+async def _get_all_plex_items(services: Services, section: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        page = await services.plex.get_basic_library_items(section, PLEX_PAGE_SIZE, offset)
+        items.extend(page)
+        if len(page) < PLEX_PAGE_SIZE:
+            return items
+        offset += len(page)
 
 
 def _annotate(

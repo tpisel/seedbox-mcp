@@ -20,14 +20,16 @@ def iso_datetime(value: Any) -> str | None:
 
 
 class PlexClient:
-    def __init__(self, base_url: str, token: str) -> None:
+    def __init__(self, base_url: str, token: str, verify_tls: bool = True) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
+        self.verify_tls = verify_tls
 
     def _session(self) -> requests.Session:
         session = requests.Session()
-        session.verify = False
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        session.verify = self.verify_tls
+        if not self.verify_tls:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         return session
 
     def _server(self) -> PlexServer:
@@ -81,9 +83,10 @@ class PlexClient:
             search_kwargs["filters"] = plex_filters
         return [self._summarize_item(item, section.title) for item in section.search(**search_kwargs)]
 
-    async def get_basic_library_items(self, section_name: str, limit: int) -> list[dict[str, Any]]:
+    async def get_basic_library_items(self, section_name: str, limit: int, offset: int = 0) -> list[dict[str, Any]]:
         section = self._section(section_name)
-        return [self._summarize_item(item, section.title) for item in section.search(limit=limit)]
+        items = section.search(maxresults=limit, container_start=offset, container_size=limit)
+        return [self._summarize_item(item, section.title) for item in items]
 
     async def get_library_size(self, section_name: str) -> dict[str, Any]:
         section = self._section(section_name)

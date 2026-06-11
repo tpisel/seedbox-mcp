@@ -74,7 +74,7 @@ class FakePlexClient:
             }
         ][:limit]
 
-    async def get_basic_library_items(self, section_name: str, limit: int) -> list[dict[str, Any]]:
+    async def get_basic_library_items(self, section_name: str, limit: int, offset: int = 0) -> list[dict[str, Any]]:
         return [
             {
                 "type": "movie",
@@ -85,7 +85,7 @@ class FakePlexClient:
                 "last_viewed_at": None,
                 "view_count": 0,
             }
-        ][:limit]
+        ][offset : offset + limit]
 
 
 @pytest.fixture
