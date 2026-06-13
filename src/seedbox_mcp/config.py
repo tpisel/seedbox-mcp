@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field, HttpUrl, SecretStr, field_validator
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
     tautulli_api_key: SecretStr | None = None
 
     oauth_access_token_ttl: int = Field(default=3600, gt=0)
+    oauth_state_path: Path = Path(".oauth_state.json")
 
     @field_validator("sonarr_default_language_profile_id", mode="before")
     @classmethod

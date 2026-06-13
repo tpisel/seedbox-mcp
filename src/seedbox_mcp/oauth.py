@@ -1,20 +1,33 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import html
+import json
+import logging
+import os
 import secrets
+import tempfile
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
-_CODE_TTL = 300  # 5 minutes
+logger = logging.getLogger("seedbox_mcp.oauth")
+
+_CODE_TTL = 600  # 10 minutes
 _REFRESH_TTL = 2_592_000  # 30 days
+
+# Access tokens, refresh tokens, and their expiry are persisted across restarts so
+# that a process restart (cron @reboot, manual bounce) doesn't force every client
+# through the consent form. Authorization codes are deliberately *not* persisted —
+# they're short-lived (10 min) and only useful mid-flow.
 
 _CONSENT_HTML = """<!DOCTYPE html>
 <html>
@@ -72,13 +85,21 @@ class OAuthStore:
     _access_tokens: dict[str, _AccessToken] = field(default_factory=dict)
     _refresh_tokens: dict[str, _RefreshToken] = field(default_factory=dict)
 
-    def __init__(self, bearer_token: str, base_url: str, access_token_ttl: int = 3600) -> None:
+    def __init__(
+        self,
+        bearer_token: str,
+        base_url: str,
+        access_token_ttl: int = 3600,
+        state_path: Path | None = None,
+    ) -> None:
         self._bearer_token = bearer_token
         self._base_url = base_url.rstrip("/")
         self._ttl = access_token_ttl
+        self._state_path = state_path
         self._codes: dict[str, _AuthCode] = {}
         self._access_tokens: dict[str, _AccessToken] = {}
         self._refresh_tokens: dict[str, _RefreshToken] = {}
+        self._load_state()
 
     # ------------------------------------------------------------------
     # Auth code
@@ -91,7 +112,7 @@ class OAuthStore:
             code_challenge=code_challenge,
             redirect_uri=redirect_uri,
             client_id=client_id,
-            expires_at=time.monotonic() + _CODE_TTL,
+            expires_at=time.time() + _CODE_TTL,
         )
         return code
 
@@ -99,7 +120,7 @@ class OAuthStore:
         entry = self._codes.pop(code, None)
         if not entry:
             return None
-        if entry.expires_at < time.monotonic():
+        if entry.expires_at < time.time():
             return None
         if entry.client_id != client_id or entry.redirect_uri != redirect_uri:
             return None
@@ -115,7 +136,7 @@ class OAuthStore:
         entry = self._access_tokens.get(token)
         if not entry:
             return False
-        if entry.expires_at < time.monotonic():
+        if entry.expires_at < time.time():
             self._access_tokens.pop(token, None)
             return False
         return True
@@ -124,7 +145,8 @@ class OAuthStore:
         entry = self._refresh_tokens.pop(refresh_token, None)
         if not entry:
             return None
-        if entry.expires_at < time.monotonic():
+        if entry.expires_at < time.time():
+            self._save_state()  # persist the pop even if expired
             return None
         return self._issue_tokens()
 
@@ -214,9 +236,10 @@ class OAuthStore:
     def _issue_tokens(self) -> tuple[str, str]:
         access = secrets.token_urlsafe(32)
         refresh = secrets.token_urlsafe(32)
-        now = time.monotonic()
+        now = time.time()
         self._access_tokens[access] = _AccessToken(expires_at=now + self._ttl)
         self._refresh_tokens[refresh] = _RefreshToken(expires_at=now + _REFRESH_TTL)
+        self._save_state()
         return access, refresh
 
     def _token_response(self, access_token: str, refresh_token: str) -> dict[str, Any]:
@@ -229,10 +252,62 @@ class OAuthStore:
 
     @staticmethod
     def _purge(ttl: float, store: dict[str, Any]) -> None:
-        now = time.monotonic()
+        now = time.time()
         expired = [k for k, v in store.items() if v.expires_at < now]
         for k in expired:
             del store[k]
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def _load_state(self) -> None:
+        if self._state_path is None or not self._state_path.exists():
+            return
+        try:
+            raw = json.loads(self._state_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Could not read OAuth state file %s; starting fresh", self._state_path)
+            return
+        now = time.time()
+        for token, entry in (raw.get("access_tokens") or {}).items():
+            exp = float(entry.get("expires_at", 0))
+            if exp > now:
+                self._access_tokens[token] = _AccessToken(expires_at=exp)
+        for token, entry in (raw.get("refresh_tokens") or {}).items():
+            exp = float(entry.get("expires_at", 0))
+            if exp > now:
+                self._refresh_tokens[token] = _RefreshToken(expires_at=exp)
+        logger.info(
+            "Loaded OAuth state: %d access, %d refresh",
+            len(self._access_tokens),
+            len(self._refresh_tokens),
+        )
+
+    def _save_state(self) -> None:
+        if self._state_path is None:
+            return
+        payload = {
+            "access_tokens": {t: {"expires_at": e.expires_at} for t, e in self._access_tokens.items()},
+            "refresh_tokens": {t: {"expires_at": e.expires_at} for t, e in self._refresh_tokens.items()},
+        }
+        # Atomic write: tmp file in the same dir, chmod 0600, then rename.
+        # Same-dir tmp ensures the rename is atomic (no cross-device move).
+        parent = self._state_path.parent
+        try:
+            parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(prefix=".oauth_state.", dir=str(parent))
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump(payload, f)
+                os.chmod(tmp_path, 0o600)
+                os.replace(tmp_path, self._state_path)
+            except Exception:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
+        except OSError:
+            logger.exception("Failed to persist OAuth state to %s", self._state_path)
 
 
 # ------------------------------------------------------------------

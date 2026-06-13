@@ -539,6 +539,7 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
         bearer_token=settings.mcp_bearer_token.get_secret_value(),
         base_url=str(settings.mcp_public_base_url).rstrip("/") if settings.mcp_public_base_url else "",
         access_token_ttl=settings.oauth_access_token_ttl,
+        state_path=settings.oauth_state_path,
     )
 
     starlette_app = Starlette(

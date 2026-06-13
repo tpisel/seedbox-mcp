@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, cast
 
 import httpx
@@ -26,18 +27,32 @@ _PIN_COOKIE = "plex_pin"
 
 def make_session(username: str, secret: str) -> str:
     s = URLSafeSerializer(secret, salt="session")
-    return s.dumps({"u": username})
+    return s.dumps({"u": username, "iat": int(time.time())})
 
 
-def read_session(cookie: str, secret: str) -> str | None:
+def read_session(cookie: str, secret: str, max_age_seconds: int | None = None) -> str | None:
+    """Returns the username if cookie is valid and within max_age_seconds of `iat`.
+
+    Sessions issued before the iat claim was added are treated as expired so a leaked
+    pre-claim cookie can't outlive its window.
+    """
     if not cookie:
         return None
     try:
         s = URLSafeSerializer(secret, salt="session")
         data = s.loads(cookie)
-        return str(data["u"])
+        username = str(data["u"])
     except (BadSignature, KeyError, Exception):
         return None
+    if max_age_seconds is not None:
+        iat = data.get("iat")
+        if not isinstance(iat, int) or int(time.time()) - iat > max_age_seconds:
+            return None
+    return username
+
+
+def _session_ttl_seconds(settings: ChatSettings) -> int:
+    return settings.chat_session_ttl_days * 86_400
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +190,7 @@ async def login_handler(request: Request, settings: ChatSettings) -> Response:
     pin_cookie_value = pin_serializer.dumps({"id": pin_id})
 
     response = HTMLResponse(_PIN_PAGE.format(code=pin_code))
-    response.set_cookie(_PIN_COOKIE, pin_cookie_value, httponly=True, samesite="lax", max_age=300)
+    response.set_cookie(_PIN_COOKIE, pin_cookie_value, httponly=True, samesite="lax", max_age=600)
     return response
 
 
@@ -212,7 +227,14 @@ async def check_handler(request: Request, settings: ChatSettings) -> Response:
     session_value = make_session(username, settings.chat_session_secret.get_secret_value())
     response = JSONResponse({"ok": True})
     response.delete_cookie(_PIN_COOKIE)
-    response.set_cookie(_SESSION_COOKIE, session_value, httponly=True, samesite="lax")
+    response.set_cookie(
+        _SESSION_COOKIE,
+        session_value,
+        httponly=True,
+        samesite="lax",
+        secure=True,
+        max_age=_session_ttl_seconds(settings),
+    )
     return response
 
 
@@ -239,7 +261,7 @@ class PlexAuthMiddleware(BaseHTTPMiddleware):
 
         secret = self._settings.chat_session_secret.get_secret_value()
         cookie = request.cookies.get(_SESSION_COOKIE, "")
-        username = read_session(cookie, secret)
+        username = read_session(cookie, secret, _session_ttl_seconds(self._settings))
         if not username:
             return RedirectResponse("/auth/login", status_code=302)
 

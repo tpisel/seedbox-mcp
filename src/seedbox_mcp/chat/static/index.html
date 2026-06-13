@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <title>Media server chatbot</title>
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -12,16 +12,17 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: #111;
-    height: 100dvh;
+    height: var(--app-height, 100dvh);
     display: flex;
     flex-direction: column;
     align-items: center;
+    overflow: hidden;
   }
 
   #shell {
     width: 100%;
     max-width: 720px;
-    height: 100dvh;
+    height: var(--app-height, 100dvh);
     display: flex;
     flex-direction: column;
     background: #1a1a1a;
@@ -206,6 +207,23 @@
   const inputEl    = document.getElementById('input');
   const sendBtn    = document.getElementById('send-btn');
   const logoutBtn  = document.getElementById('logout-btn');
+
+  // Pin the layout to the visual viewport so the iOS keyboard doesn't push the
+  // input bar off-screen. The visual viewport shrinks when the keyboard opens;
+  // dvh/svh follow the layout viewport on iOS Safari and don't.
+  const vv = window.visualViewport;
+  function syncViewport() {
+    const h = vv ? vv.height : window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', h + 'px');
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+  syncViewport();
+  if (vv) {
+    vv.addEventListener('resize', syncViewport);
+    vv.addEventListener('scroll', syncViewport);
+  } else {
+    window.addEventListener('resize', syncViewport);
+  }
 
   let history = JSON.parse(sessionStorage.getItem('chat_history') || '[]');
 

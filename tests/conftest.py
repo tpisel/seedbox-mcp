@@ -89,7 +89,7 @@ class FakePlexClient:
 
 
 @pytest.fixture
-def settings() -> Settings:
+def settings(tmp_path) -> Settings:  # type: ignore[no-untyped-def]
     return Settings(
         mcp_bearer_token=SecretStr("dev"),
         radarr_url="http://radarr.local",
@@ -102,6 +102,7 @@ def settings() -> Settings:
         sonarr_default_quality_profile_id=1,
         plex_url="http://plex.local",
         plex_token=SecretStr("plex-token"),
+        oauth_state_path=tmp_path / "oauth_state.json",
     )
 
 

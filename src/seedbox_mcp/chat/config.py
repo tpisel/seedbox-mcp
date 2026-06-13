@@ -12,6 +12,7 @@ class ChatSettings(Settings):
     chat_port: int = 17433
     chat_public_base_url: str = Field(min_length=1)
     chat_session_secret: SecretStr = Field(min_length=1)
+    chat_session_ttl_days: int = Field(default=90, gt=0)
     chat_plex_client_id: str = Field(min_length=1)
     anthropic_api_key: SecretStr = Field(min_length=1)
     system_prompt_path: Path | None = None
