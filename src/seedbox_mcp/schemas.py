@@ -66,8 +66,12 @@ class MediaReference(BaseModel):
 
 
 class QueueItemSummary(BaseModel):
+    queue_id: int | None = None
     source: Literal["radarr", "sonarr"]
     title: str
+    release_title: str | None = None
+    radarr_id: int | None = None
+    sonarr_id: int | None = None
     status: str
     tracked_download_state: str | None = None
     progress_percent: float | None = None

@@ -140,7 +140,14 @@ def services(settings: Settings) -> Services:
             },
             ("GET", "/api/v3/queue"): {
                 "records": [
-                    {"id": 10, "title": "Heat (1995)", "status": "completed", "trackedDownloadState": "importBlocked"},
+                    {
+                        "id": 10,
+                        "title": "Heat.1995.1080p.BluRay.x264-GROUP",
+                        "movieId": 1,
+                        "movie": {"id": 1, "title": "Heat"},
+                        "status": "completed",
+                        "trackedDownloadState": "importBlocked",
+                    },
                 ]
             },
             ("GET", "/api/v3/wanted/missing"): {"records": []},
@@ -173,7 +180,9 @@ def services(settings: Settings) -> Services:
                 "records": [
                     {
                         "id": 20,
-                        "title": "The Wire S01E01",
+                        "title": "The.Wire.S01E01.1080p.BluRay.x264-GROUP",
+                        "seriesId": 2,
+                        "series": {"id": 2, "title": "The Wire"},
                         "status": "completed",
                         "trackedDownloadState": "importBlocked",
                     },

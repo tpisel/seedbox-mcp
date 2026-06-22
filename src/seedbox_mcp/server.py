@@ -118,6 +118,9 @@ def create_mcp(services: Services) -> FastMCP:
         """Returns Radarr library state.
 
         Use include_queue=true to retrieve queue_id values needed by radarr_queue_action.
+        Each queue item also carries radarr_id (for radarr_research_movie) plus a clean
+        title and the raw release_title — act on these directly rather than feeding the
+        release name back through media_search.
         Set include_movies=false or include_missing=false to reduce response size when
         only queue data is needed.
         """
@@ -132,6 +135,9 @@ def create_mcp(services: Services) -> FastMCP:
         """Returns Sonarr library state.
 
         Use include_queue=true to retrieve queue_id values needed by sonarr_queue_action.
+        Each queue item also carries sonarr_id (for sonarr_research_series) plus a clean
+        title and the raw release_title — act on these directly rather than feeding the
+        release name back through media_search.
         Set include_series=false or include_missing=false to reduce response size when
         only queue data is needed.
         """

@@ -39,7 +39,7 @@ async def radarr_overview(
             movies = await services.radarr.get("/api/v3/movie")
             data["movies"] = [compact_movie(item) for item in _as_list(movies)[:bounded]]
         if include_queue:
-            queue = await services.radarr.get("/api/v3/queue", {"page": 1, "pageSize": bounded})
+            queue = await services.radarr.get("/api/v3/queue", {"page": 1, "pageSize": bounded, "includeMovie": True})
             data["queue"] = [compact_queue_item("radarr", item) for item in _records(queue)[:bounded]]
         if include_missing:
             missing = await services.radarr.get("/api/v3/wanted/missing", {"page": 1, "pageSize": bounded})

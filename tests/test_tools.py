@@ -9,6 +9,7 @@ from seedbox_mcp.tools.radarr import (
     radarr_add_movie,
     radarr_delete_movie,
     radarr_delete_movies_batch,
+    radarr_overview,
     radarr_queue_action,
     radarr_research_movie,
 )
@@ -17,6 +18,7 @@ from seedbox_mcp.tools.sonarr import (
     sonarr_add_series,
     sonarr_delete_series,
     sonarr_delete_series_batch,
+    sonarr_overview,
     sonarr_queue_action,
     sonarr_research_series,
 )
@@ -146,6 +148,24 @@ async def test_sonarr_queue_action_confirm_calls_delete(services: Services) -> N
     path, params = services.sonarr.deletes[0]
     assert path == "/api/v3/queue/20"
     assert params == {"removeFromClient": "false", "blocklist": "false"}
+
+
+@pytest.mark.asyncio
+async def test_radarr_queue_item_exposes_clean_title_and_id(services: Services) -> None:
+    result = await radarr_overview(services, include_movies=False, include_missing=False)
+    item = result["data"]["queue"][0]
+    assert item["title"] == "Heat"
+    assert item["release_title"] == "Heat.1995.1080p.BluRay.x264-GROUP"
+    assert item["radarr_id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_sonarr_queue_item_exposes_clean_title_and_id(services: Services) -> None:
+    result = await sonarr_overview(services, include_series=False, include_missing=False)
+    item = result["data"]["queue"][0]
+    assert item["title"] == "The Wire"
+    assert item["release_title"] == "The.Wire.S01E01.1080p.BluRay.x264-GROUP"
+    assert item["sonarr_id"] == 2
 
 
 @pytest.mark.asyncio

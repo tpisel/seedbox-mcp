@@ -39,7 +39,10 @@ async def sonarr_overview(
             series = await services.sonarr.get("/api/v3/series")
             data["series"] = [compact_series(item) for item in _as_list(series)[:bounded]]
         if include_queue:
-            queue = await services.sonarr.get("/api/v3/queue", {"page": 1, "pageSize": bounded})
+            queue = await services.sonarr.get(
+                "/api/v3/queue",
+                {"page": 1, "pageSize": bounded, "includeSeries": True, "includeEpisode": True},
+            )
             data["queue"] = [compact_queue_item("sonarr", item) for item in _records(queue)[:bounded]]
         if include_missing:
             missing = await services.sonarr.get("/api/v3/wanted/missing", {"page": 1, "pageSize": bounded})

@@ -54,16 +54,29 @@ def compact_queue_item(source: str, item: dict[str, Any]) -> dict[str, Any]:
     progress_percent = None
     if isinstance(progress, (int, float)) and isinstance(total, (int, float)) and total:
         progress_percent = round(max(0.0, min(100.0, 100 - (progress / total * 100))), 1)
-    return {
+    # The queue record's top-level `title` is the raw release name (scene string),
+    # not the media title. The clean title and the media id live on the embedded
+    # movie/series object, which the overview fetch requests via includeMovie/
+    # includeSeries. Surfacing both lets an agent go queue -> radarr_id/sonarr_id ->
+    # research/queue_action directly, instead of fuzzy-matching the release name.
+    movie = item.get("movie") or {}
+    series = item.get("series") or {}
+    compact = {
         "queue_id": item.get("id"),
         "source": source,
-        "title": pick_title(item),
+        "title": movie.get("title") or series.get("title") or pick_title(item),
+        "release_title": item.get("title"),
         "status": item.get("status") or "unknown",
         "tracked_download_state": tracked or "unknown",
         "progress_percent": progress_percent,
         "estimated_completion_time": item.get("estimatedCompletionTime"),
         "error_message": item.get("errorMessage") or item.get("statusMessages"),
     }
+    if source == "radarr":
+        compact["radarr_id"] = item.get("movieId") or movie.get("id")
+    else:
+        compact["sonarr_id"] = item.get("seriesId") or series.get("id")
+    return compact
 
 
 def bytes_to_gb(value: Any) -> float | None:
