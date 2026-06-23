@@ -190,13 +190,19 @@ def create_mcp(services: Services) -> FastMCP:
           director, actor, country — matched via Plex only (Radarr/Sonarr lack these fields).
             When any of these are set, Plex is searched automatically even if not in types.
             Plex requires the full name exactly (e.g. "Akira Kurosawa", not "Kurosawa").
-            When a crew/country filter is active, Radarr/Sonarr results are suppressed
-            entirely to avoid returning unfiltered partial matches.
-          genre, language, year — matched via both Radarr/Sonarr and Plex.
+            The existing Radarr/Sonarr library is suppressed when one of these is set (it
+            can't filter on crew), but external lookup still runs on the query — those
+            results are NOT crew-filtered, and a warning says so. Combine a title query
+            with a crew filter to keep getting addable candidates.
+          year — matched via every source, including external lookup (use it to pin down
+            the right release when adding, e.g. query="Air Force One", year=1997).
+          genre, language — matched via the existing Radarr/Sonarr library and Plex, but
+            NOT applied to external lookup results.
             language matches originalLanguage in Radarr and audioLanguage in Plex (e.g. "Japanese").
             genre is a substring match (e.g. "Drama" matches "Drama", "Drama/Thriller").
 
-        Attribute filters suppress external lookup (include_external_lookup is ignored when filters are set).
+        A query always drives external lookup (when include_external_lookup is true);
+        attribute filters refine results, they no longer disable it.
 
         Each candidate includes match_type and safe_for_action. Act automatically on candidates only
         where safe_for_action is true (exact title match, plus year match if a year was supplied in
@@ -229,7 +235,14 @@ def create_mcp(services: Services) -> FastMCP:
         search_now: bool = True,
         confirm: bool = False,
     ) -> dict[str, Any]:
-        """Add a movie to Radarr. Use media_search first to get the correct tmdb_id.
+        """Add a movie to Radarr.
+
+        tmdb_id must come from a media_search candidate — never recall or construct one.
+        Run media_search first and take tmdb_id from a result.
+
+        confirm: false (default) is a dry run — it returns a would_add preview and performs
+          no upstream call. Check would_add.title and would_add.year match the intended movie,
+          then call again with confirm=true to actually add it.
 
         minimum_availability values: announced, inCinemas, released, tba.
         """
@@ -276,7 +289,14 @@ def create_mcp(services: Services) -> FastMCP:
         search_now: bool = True,
         confirm: bool = False,
     ) -> dict[str, Any]:
-        """Add a TV series to Sonarr. Use media_search first to get the correct tvdb_id.
+        """Add a TV series to Sonarr.
+
+        tvdb_id must come from a media_search candidate — never recall or construct one.
+        Run media_search first and take tvdb_id from a result.
+
+        confirm: false (default) is a dry run — it returns a would_add preview and performs
+          no upstream call. Check the preview title/year match the intended series, then call
+          again with confirm=true to actually add it.
 
         monitor values: all, future, missing, existing, pilot, firstSeason, latestSeason, none.
         Use firstSeason to monitor only S1, latestSeason for the newest season only.

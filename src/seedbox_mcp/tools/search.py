@@ -28,14 +28,16 @@ async def media_search(
             return ToolResponse.failure("validation", "media_search requires a non-empty query.")
 
         bounded = clamp_limit(limit, default=10, maximum=50)
-        has_attr_filter = any([director, actor, genre, language, year, country])
         # Crew/location filters can only be applied via Plex; always include it when they're set.
         has_crew_filter = any([director, actor, country])
-        effective_external = include_external_lookup and not has_attr_filter
-        # Skip Radarr/Sonarr when crew filters are the only constraint — those fields aren't
-        # in the Radarr/Sonarr list responses, so we'd return unfiltered results.
-        # Radarr/Sonarr lack director/actor/country fields entirely, so including their
-        # results when those filters are active would be misleading (genre-only partial match).
+        # External lookup is gated only by the caller's flag — attribute filters must NOT
+        # silently disable it (a year/genre/language refinement is no reason to stop offering
+        # not-yet-owned titles to add). Year is post-filtered on the lookup results below.
+        effective_external = include_external_lookup
+        # Skip the existing Radarr/Sonarr libraries when a crew filter is active: those list
+        # responses lack director/actor/country, so we'd return unfiltered partial matches.
+        # External lookup still runs (it carries the addable candidates) but likewise can't
+        # filter on crew — surfaced via a warning to the caller.
         skip_arr = has_crew_filter
 
         wanted = set(types or ["movie", "series", "plex"])
@@ -43,15 +45,21 @@ async def media_search(
             wanted.add("plex")
 
         include_directors = bool(director or actor)
+        warnings: list[str] = []
+        if has_crew_filter:
+            warnings.append(
+                "director/actor/country filters are matched in Plex only; "
+                "any Radarr/Sonarr results are not filtered by cast/crew/country."
+            )
         candidates: list[dict[str, Any]] = []
         if include_existing and "movie" in wanted and not skip_arr:
             candidates.extend(await _radarr_existing(services, query, genre=genre, language=language, year=year))
-        if effective_external and "movie" in wanted:
-            candidates.extend(await _radarr_lookup(services, query))  # type: ignore[arg-type]
+        if effective_external and query and "movie" in wanted:
+            candidates.extend(await _radarr_lookup(services, query, year=year))
         if include_existing and "series" in wanted and not skip_arr:
             candidates.extend(await _sonarr_existing(services, query, genre=genre, year=year))
-        if effective_external and "series" in wanted:
-            candidates.extend(await _sonarr_lookup(services, query))  # type: ignore[arg-type]
+        if effective_external and query and "series" in wanted:
+            candidates.extend(await _sonarr_lookup(services, query, year=year))
         if include_existing and "plex" in wanted:
             candidates.extend(
                 await _plex_existing(
@@ -68,7 +76,7 @@ async def media_search(
                 )
             )
         candidates.sort(key=lambda item: item["confidence"], reverse=True)
-        return ToolResponse.success({"query": query, "candidates": candidates[:bounded]})
+        return ToolResponse.success({"query": query, "candidates": candidates[:bounded]}, warnings)
 
     return await safe_tool(run)
 
@@ -112,10 +120,12 @@ async def _radarr_existing(
     return results
 
 
-async def _radarr_lookup(services: Services, query: str) -> list[dict[str, Any]]:
+async def _radarr_lookup(services: Services, query: str, year: int | None = None) -> list[dict[str, Any]]:
     movies = await services.radarr.get("/api/v3/movie/lookup", {"term": query})
     results = []
     for item in _as_list(movies):
+        if year is not None and item.get("year") != year:
+            continue
         _, match_type = is_exact_title_year_match(query, None, item.get("title"), item.get("year"))
         results.append(
             {
@@ -170,10 +180,12 @@ async def _sonarr_existing(
     return results
 
 
-async def _sonarr_lookup(services: Services, query: str) -> list[dict[str, Any]]:
+async def _sonarr_lookup(services: Services, query: str, year: int | None = None) -> list[dict[str, Any]]:
     series = await services.sonarr.get("/api/v3/series/lookup", {"term": query})
     results = []
     for item in _as_list(series):
+        if year is not None and item.get("year") != year:
+            continue
         _, match_type = is_exact_title_year_match(query, None, item.get("title"), item.get("year"))
         results.append(
             {

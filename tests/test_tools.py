@@ -649,6 +649,31 @@ async def test_media_search_lookup_candidates_never_safe(services: Services) -> 
 
 
 @pytest.mark.asyncio
+async def test_media_search_external_lookup_runs_with_year(services: Services) -> None:
+    # Regression: a year filter must not disable external lookup. The Radarr lookup
+    # fixture returns Heat (1995), so a matching-year query should surface it.
+    result = await media_search(services, "Heat", year=1995, limit=10)
+    sources = {c["source"] for c in result["data"]["candidates"]}
+    assert "radarr_lookup" in sources
+
+
+@pytest.mark.asyncio
+async def test_media_search_year_postfilters_lookup(services: Services) -> None:
+    # Heat is 1995; a different year filter drops it from the lookup results.
+    result = await media_search(services, "Heat", year=2024, limit=10)
+    sources = {c["source"] for c in result["data"]["candidates"]}
+    assert "radarr_lookup" not in sources
+
+
+@pytest.mark.asyncio
+async def test_media_search_crew_filter_keeps_lookup_and_warns(services: Services) -> None:
+    result = await media_search(services, "Heat", actor="Al Pacino", limit=10)
+    sources = {c["source"] for c in result["data"]["candidates"]}
+    assert "radarr_lookup" in sources
+    assert any("Plex only" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
 async def test_media_search_drops_directors_when_no_filter(services: Services) -> None:
     result = await media_search(services, "Heat", limit=10)
     plex_candidates = [c for c in result["data"]["candidates"] if c["source"] == "plex"]
