@@ -8,6 +8,10 @@ list:
 setup:
     uv sync
 
+# deploy latest committed code to the seedbox (ssh + git pull + restart)
+deploy:
+    bash scripts/deploy.sh
+
 # run the MCP server
 run:
     uv run python -m seedbox_mcp.server

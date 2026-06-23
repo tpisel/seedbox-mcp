@@ -151,6 +151,10 @@ cp .env.example .env
 uv sync
 ```
 
+#### Redeploying
+
+Once it's cloned, push new code from your workstation with `just deploy` (or `bash scripts/deploy.sh`). It SSHes in, fast-forwards the checkout, runs `uv sync`, and restarts both servers. It expects a `seedbox` host in your `~/.ssh/config` with key auth set up (`ssh-copy-id seedbox`); override the target/path/branch via `SEEDBOX_SSH`, `SEEDBOX_DIR`, `SEEDBOX_BRANCH`.
+
 ### Run in the background with screen
 
 `scripts/start.sh` kills any existing sessions and launches both servers in detached `screen` sessions (`media-mcp` and `media-chat`), tailing their output to `mcp.log` and `chat.log`:
