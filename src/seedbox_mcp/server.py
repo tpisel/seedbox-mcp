@@ -30,6 +30,7 @@ from seedbox_mcp.tools.sonarr import (
     sonarr_add_series,
     sonarr_delete_series,
     sonarr_delete_series_batch,
+    sonarr_monitor_season,
     sonarr_overview,
     sonarr_queue_action,
     sonarr_research_series,
@@ -130,6 +131,7 @@ def create_mcp(services: Services) -> FastMCP:
         include_series: bool = True,
         include_queue: bool = True,
         include_missing: bool = True,
+        include_seasons: bool = False,
         limit: int = 100,
     ) -> dict[str, Any]:
         """Returns Sonarr library state.
@@ -140,8 +142,14 @@ def create_mcp(services: Services) -> FastMCP:
         release name back through media_search.
         Set include_series=false or include_missing=false to reduce response size when
         only queue data is needed.
+
+        Set include_seasons=true to get a per-season breakdown for each series: which
+        seasons exist, whether each is monitored, and how many episodes are on disk. This
+        is how to answer "what seasons of <show> do we have". Pair with media_search to
+        find the show's sonarr_id, then match it in this list. Feed a season_number into
+        sonarr_monitor_season to start collecting a season that isn't on disk yet.
         """
-        return await sonarr_overview(services, include_series, include_queue, include_missing, limit)
+        return await sonarr_overview(services, include_series, include_queue, include_missing, include_seasons, limit)
 
     async def plex_library_size_tool(section: str = "all") -> dict[str, Any]:
         """Returns the size of the library in GB
@@ -332,6 +340,27 @@ def create_mcp(services: Services) -> FastMCP:
         """
         return await sonarr_research_series(services, sonarr_id, mode, confirm)
 
+    async def sonarr_monitor_season_tool(
+        sonarr_id: int,
+        season_number: int,
+        search_now: bool = True,
+        confirm: bool = False,
+    ) -> dict[str, Any]:
+        """Start collecting one season of a series already in Sonarr, then search for it.
+
+        Use this for "add season N of <show>" when the show already exists in Sonarr but
+        that season isn't on disk. Get sonarr_id from media_search, and confirm the season
+        is missing via sonarr_overview(include_seasons=true). If the show is NOT in Sonarr
+        yet, call sonarr_add_series first (monitor=none), then this.
+
+        It marks the season monitored (and the series, which Sonarr requires) and, when
+        search_now=true, triggers an indexer search for that season's episodes.
+
+        confirm: false (default) is a dry run returning a would_monitor preview with no
+          upstream change. Show it, then call again with confirm=true once the user agrees.
+        """
+        return await sonarr_monitor_season(services, sonarr_id, season_number, search_now, confirm)
+
     async def radarr_queue_action_tool(
         queue_id: int,
         action: str,
@@ -521,6 +550,7 @@ def create_mcp(services: Services) -> FastMCP:
     register_tool(mcp, "radarr_research_movie", WRITE, radarr_research_movie_tool)
     register_tool(mcp, "sonarr_add_series", WRITE, sonarr_add_series_tool)
     register_tool(mcp, "sonarr_research_series", WRITE, sonarr_research_series_tool)
+    register_tool(mcp, "sonarr_monitor_season", WRITE, sonarr_monitor_season_tool)
     register_tool(mcp, "radarr_delete_movie", DESTRUCTIVE, radarr_delete_movie_tool)
     register_tool(mcp, "radarr_delete_movies_batch", DESTRUCTIVE, radarr_delete_movies_batch_tool)
     register_tool(mcp, "sonarr_delete_series", DESTRUCTIVE, sonarr_delete_series_tool)
